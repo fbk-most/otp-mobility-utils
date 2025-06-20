@@ -287,7 +287,7 @@ def test_single_query(args: list):
 
     result_found = False
     n_iter = 0
-    max_iter = 50
+    max_iter = 150
 
     while not result_found and n_iter < max_iter:
         result = processor.execute_query(
@@ -329,7 +329,7 @@ def main(argv: list):
 
     # Configurazione
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
-    INPUT_FILE = "data/input_od/OD_coordinates.parquet"
+    INPUT_FILE = "data/input_od/OD_coordinates_v2.parquet"
     OUTPUT_FILE = f"data/output/OD_travel_times_{MAIN_MODE}_WALK_7AM_5hextended.parquet"
     
     # Inizializza il processore
@@ -346,8 +346,8 @@ def main(argv: list):
         dest_lon_col='dest_lon',
         departure_date="2025-06-10",  # YYYY-MM-DD format
         departure_time="07:00:00",  # HH:MM:SS format
-        delay_seconds=0.5,  # Pausa tra le richieste,
-        dest_change=False,
+        delay_seconds=1.0,  # Pausa tra le richieste,
+        dest_change=True,
         origin_change=True
     )
     
