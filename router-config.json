@@ -1,0 +1,6 @@
+{
+  "routingDefaults": {
+    "searchWindow": "6h",
+    "numItineraries": 5
+  }
+}
