@@ -3,7 +3,7 @@ from shapely.geometry import box
 from shapely.ops import transform
 from pyproj import Transformer, CRS
 
-coord = pd.read_parquet("../OD_coordinates.parquet")
+coord = pd.read_parquet("../data/input_od/OD_coordinates.parquet")
 
 min_lat = min(
     coord['origin_lat'].min(),

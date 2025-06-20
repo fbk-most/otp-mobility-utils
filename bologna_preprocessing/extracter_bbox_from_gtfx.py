@@ -1,7 +1,7 @@
 import pandas as pd
 
 # Load stops.txt
-stops = pd.read_csv("data/gommagtfsbo_20250513/stops.txt")
+stops = pd.read_csv("data/input_service/gommagtfsbo_20250513/stops.txt")
 
 # Ensure required columns exist
 if 'stop_lat' not in stops or 'stop_lon' not in stops:
