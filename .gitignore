@@ -170,9 +170,17 @@ cython_debug/
 *.geojson
 *.zip
 *.pbf
+*.txt
+*.xlsx
+*.SHP
+*.CPG 
+*.cpg
+*.CTF
+*.DBF
+*.PRJ
+*.SHX
 
 # Program
 *.jar
 
 # Hidden folders
-data/
