@@ -7,17 +7,7 @@ import time as time_module
 from typing import Dict, List, Optional
 import sys
 
-class OTPBatchProcessor:
-    def __init__(self, otp_graphql_endpoint: str):
-        """
-        Inizializza il processore per OpenTripPlanner
-        
-        Args:
-            otp_graphql_endpoint: URL dell'endpoint GraphQL di OTP (es: "http://localhost:8080/otp/gtfs/v1")
-        """
-        self.endpoint = otp_graphql_endpoint
-        
-        self.query = """
+QUERY_SIMPLE = """
             query PlanTrip(
             $from: InputCoordinates!, 
             $to: InputCoordinates!, 
@@ -30,8 +20,7 @@ class OTPBatchProcessor:
                 to: $to,
                 date: $date,
                 time: $time,
-                transportModes: $mode,
-                walkReluctance: 3
+                transportModes: $mode
             ) {
                 itineraries {
                     duration
@@ -42,13 +31,78 @@ class OTPBatchProcessor:
             }
             }
         """
+
+QUERY_COMPLEX = """
+            query PlanTrip(
+                $from: InputCoordinates!, 
+                $to: InputCoordinates!, 
+                $date: String!, 
+                $time: String!, 
+                $mode: [TransportMode!]!
+            ) {
+                plan(
+                    from: $from,
+                    to: $to,
+                    date: $date,
+                    time: $time,
+                    transportModes: $mode
+                ) {
+                    itineraries {
+                        duration
+                        walkTime
+                        transitTime
+                        start
+                        end
+                        numberOfTransfers
+                        legs {
+                            mode
+                            duration
+                            startTime
+                            endTime
+                            distance
+                            from {
+                                name
+                                lat
+                                lon
+                            }
+                            to {
+                                name
+                                lat
+                                lon
+                            }
+                            route {
+                                shortName
+                                longName
+                                mode
+                            }
+                            trip {
+                                routeShortName
+                            }
+                        }
+                    }
+                }
+            }
+            """
+
+class OTPBatchProcessor:
+    def __init__(self, otp_graphql_endpoint: str):
+        """
+        Inizializza il processore per OpenTripPlanner
+        
+        Args:
+            otp_graphql_endpoint: URL dell'endpoint GraphQL di OTP (es: "http://localhost:8080/otp/gtfs/v1")
+        """
+        self.endpoint = otp_graphql_endpoint
+        
+        self.query = QUERY_SIMPLE
     
     def execute_query(self, origin_lat: float, origin_lon: float, 
-                     dest_lat: float, dest_lon: float, main_mode: str,
+                     dest_lat: float, dest_lon: float, main_mode: list,
                      departure_date: str|None = None, 
                      departure_time: str|None = None) -> Optional[Dict]:
         """
-        Esegue una singola query GraphQL
+        Esegue una singola query GraphQL.
+        Il parametro di main_mode deve essere fornito come una lista di dizionari, es: [{"mode": "CAR")}, {"mode": "WALK"}]
         """
         # CORREZIONE 1: Formato corretto per data e ora
         if departure_date is None:
@@ -57,6 +111,12 @@ class OTPBatchProcessor:
             departure_time = time(9, 0).isoformat()   # "HH:MM:SS"
 
         # correzione 2  
+        modes = [{"mode": "WALK"}]
+        if "CAR" in main_mode:
+            modes.append({"mode": "CAR", "qualifier": "PARK"})
+        if "TRANSIT" in main_mode:
+            modes.append({"mode": "TRANSIT"})
+
         variables = {
             "from": {
                 "lat": float(origin_lat),
@@ -68,8 +128,7 @@ class OTPBatchProcessor:
             },
             "date": str(departure_date),
             "time": str(departure_time),
-            "mode": [{"mode": str(main_mode)},
-                     {"mode": "WALK"}]
+            "mode": modes
         }
 
         payload = {
@@ -104,6 +163,7 @@ class OTPBatchProcessor:
     def extract_route_info(self, result: Dict) -> Dict:
         """
         Estrae le informazioni principali dal risultato della query
+        TODO: add other information on the query related to %time car, %time bus, sequences of car-bus
         """
         if not result or 'data' not in result:
             return {
@@ -152,7 +212,7 @@ class OTPBatchProcessor:
     
     def process_dataset(
         self, input_file: str, output_file: str, 
-        main_mode: str,
+        main_mode: list,
         origin_lat_col: str = 'origin_lat', 
         origin_lon_col: str = 'origin_lon',
         dest_lat_col: str = 'dest_lat', 
@@ -272,22 +332,28 @@ class OTPBatchProcessor:
 
 def test_single_query(args: list):
     """Funzione per testare una singola query"""
-    MAIN_MODE = args[0]
+    MAIN_MODEs = args
+    if "WALK" not in MAIN_MODEs:
+        MAIN_MODEs = MAIN_MODEs + ["WALK"]
+
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql"
     
     processor = OTPBatchProcessor(OTP_ENDPOINT)
     
     # Test con coordinate di esempio
-    lat = 44.53083
-    lon = 11.18020
-    dest_lat_tmp = 44.46925193255113
-    dest_lon_tmp = 11.366358609573888
-    origin_lat_tmp = 44.29138432534488
-    origin_lon_tmp = 11.085878478293031
+    # lat = 44.53083
+    # lon = 11.18020
+    # dest_lat_tmp = 44.46925193255113
+    # dest_lon_tmp = 11.366358609573888
+    # origin_lat_tmp = 44.29138432534488
+    # origin_lon_tmp = 11.085878478293031
+    lat, lon = 44.498149, 11.340096
+    dest_lat_tmp, dest_lon_tmp = 44.498149, 11.340096
+    origin_lat_tmp, origin_lon_tmp = 44.545637, 11.201394
 
     result_found = False
     n_iter = 0
-    max_iter = 150
+    max_iter = 5
 
     while not result_found and n_iter < max_iter:
         result = processor.execute_query(
@@ -296,8 +362,8 @@ def test_single_query(args: list):
             dest_lat=lat,
             dest_lon=lon,
             departure_date="2025-06-10",
-            departure_time="16:30:00",
-            main_mode=MAIN_MODE
+            departure_time="07:30:00",
+            main_mode=MAIN_MODEs
         )
         route_info = processor.extract_route_info(result) # type: ignore
 
@@ -321,16 +387,20 @@ def test_single_query(args: list):
     
 def main(argv: list):
     # IO da terminale
-    if len(sys.argv) != 2:
-        raise ValueError("Error: 1 argument needed")
-    MAIN_MODE = argv[0]   
-    if MAIN_MODE not in ["CAR", "BUS", "TRANSIT"]:
-        raise ValueError("Error: MAIN_MODE not in ['CAR', 'BUS', 'TRANSIT']")
+    if len(sys.argv) >= 1:
+        raise ValueError("Error: at least 1 argument needed")
+    for main_mode in argv:
+        if main_mode not in ["CAR", "CAR_TO_PARK", "BUS", "TRANSIT", "WALK"]:
+            raise ValueError("Error: One of the MAIN_MODEs is not in ['CAR', 'CAR_TO_PARK', 'BUS', 'TRANSIT', 'WALK]")
+        
+    MAIN_MODEs = argv
+    if "WALK" not in MAIN_MODEs:
+        MAIN_MODEs = MAIN_MODEs + ["WALK"]
 
     # Configurazione
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
     INPUT_FILE = "data/input_od/OD_coordinates_v2.parquet"
-    OUTPUT_FILE = f"data/output/OD_travel_times_{MAIN_MODE}_WALK_7AM_5hextended.parquet"
+    OUTPUT_FILE = f"data/output/OD_travel_times_{"_".join(MAIN_MODEs)}_7AM_5hextended.parquet"
     
     # Inizializza il processore
     processor = OTPBatchProcessor(OTP_ENDPOINT)
@@ -339,7 +409,7 @@ def main(argv: list):
     results = processor.process_dataset(
         input_file=INPUT_FILE,
         output_file=OUTPUT_FILE,
-        main_mode=MAIN_MODE,
+        main_mode=MAIN_MODEs,
         origin_lat_col='origin_lat',
         origin_lon_col='origin_lon',
         dest_lat_col='dest_lat',
@@ -365,5 +435,5 @@ def main(argv: list):
 
 
 if __name__ == "__main__":
-    main(argv=sys.argv[1:])
-    #test_single_query(args=sys.argv[1:])
+    #main(argv=sys.argv[1:])
+    test_single_query(args=sys.argv[1:])

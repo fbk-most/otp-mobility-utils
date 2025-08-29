@@ -1,6 +1,7 @@
 {
   "routingDefaults": {
-    "searchWindow": "6h",
-    "numItineraries": 5
+    "searchWindow": "8h",
+    "numItineraries": 5,
+    "walkReluctance" : 3.0
   }
 }
