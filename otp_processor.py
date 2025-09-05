@@ -38,51 +38,29 @@ QUERY_COMPLEX = """
                 $to: InputCoordinates!, 
                 $date: String!, 
                 $time: String!, 
-                $mode: [TransportMode!]!
-            ) {
-                plan(
-                    from: $from,
-                    to: $to,
-                    date: $date,
-                    time: $time,
-                    transportModes: $mode
-                ) {
-                    itineraries {
-                        duration
-                        walkTime
-                        transitTime
-                        start
-                        end
-                        numberOfTransfers
-                        legs {
-                            mode
-                            duration
-                            startTime
-                            endTime
-                            distance
-                            from {
-                                name
-                                lat
-                                lon
-                            }
-                            to {
-                                name
-                                lat
-                                lon
-                            }
-                            route {
-                                shortName
-                                longName
-                                mode
-                            }
-                            trip {
-                                routeShortName
-                            }
-                        }
-                    }
+                $mode: [TransportMode!]!) {
+            plan(
+                from: $from, 
+                to: $to, 
+                date: $date, 
+                time: $time, 
+                transportModes: $mode) {
+            itineraries {
+                duration
+                walkTime
+                numberOfTransfers
+                start
+                end
+                legs {
+                    mode
+                    duration
+                    startTime
+                    endTime
                 }
             }
-            """
+        }
+    }
+"""
 
 class OTPBatchProcessor:
     def __init__(self, otp_graphql_endpoint: str):
@@ -94,7 +72,7 @@ class OTPBatchProcessor:
         """
         self.endpoint = otp_graphql_endpoint
         
-        self.query = QUERY_SIMPLE
+        self.query = QUERY_COMPLEX
     
     def execute_query(self, origin_lat: float, origin_lon: float, 
                      dest_lat: float, dest_lon: float, main_mode: list,
@@ -167,46 +145,63 @@ class OTPBatchProcessor:
         Estrae le informazioni principali dal risultato della query
         TODO: add other information on the query related to %time car, %time bus, sequences of car-bus
         """
-        if not result or 'data' not in result:
-            return {
+        # Handle the cases with no output
+        error_return = {
                 'status': 'error',
                 'duration_seconds': None,
-                'duration_minutes': None,
                 'walk_time_seconds': None,
+                'number_of_legs': None,
+                'transport_modes': [],
+                'transport_mode_sequences': [],
+                'transport_sequence': '',
+                'transport_durations': [],
+                'transport_percentages': [],
+                'number_of_transit_transfers': None,
                 'start_time': None,
                 'end_time': None
             }
+
+        if not result or 'data' not in result:
+            return error_return
         
         plan = result['data'].get('plan')
         if not plan:
-            return {
-                'status': 'no_plan',
-                'duration_seconds': None,
-                'duration_minutes': None,
-                'walk_time_seconds': None,
-                'start_time': None,
-                'end_time': None
-            }
+            error_return['status'] = 'no_plan'
+            return error_return
         
         itineraries = plan.get('itineraries', [])
         if not itineraries:
-            return {
-                'status': 'no_route',
-                'duration_seconds': None,
-                'duration_minutes': None,
-                'walk_time_seconds': None,
-                'start_time': None,
-                'end_time': None
-            }
-        
-        # Prendi l'itinerario più breve
+            error_return['status'] = 'no_itineraries'
+            return error_return
+         
+        # Handle the cases with one or more solutions
         best_itinerary = min(itineraries, key=lambda x: x.get('duration', float('inf')))
         
+        legs = best_itinerary.get('legs', [])
+        total_duration = sum(leg.get('duration', 0) for leg in legs)
+        transport_modes = []
+        transport_durations = []
+        transport_percentages = []
+        for leg in legs:
+            mode = leg.get('mode', 'UNKNOWN')
+            transport_modes.append(mode)
+
+            duration = leg.get('duration', 0)
+            transport_durations.append(duration)
+
+            percentage = (duration / total_duration * 100) if total_duration > 0 else 0
+            transport_percentages.append(round(percentage, 2))
+
         return {
             'status': 'success',
             'duration_seconds': best_itinerary.get('duration'),
-            'duration_minutes': round(best_itinerary.get('duration', 0) / 60, 2) if best_itinerary.get('duration') else None,
             'walk_time_seconds': best_itinerary.get('walkTime'),
+            'number_of_legs': len(legs),
+            'transport_modes': transport_modes,
+            'transport_mode_sequences': [],
+            'transport_durations': transport_durations,
+            'transport_percentages': transport_percentages,
+            'number_of_transit_transfers': best_itinerary.get('numberOfTransfers'),
             'start_time': best_itinerary.get('start'),
             'end_time': best_itinerary.get('end')
         }
@@ -367,12 +362,13 @@ def test_single_query(args: list):
         result = processor.execute_query(
             origin_lat=origin_lat_tmp,
             origin_lon=origin_lon_tmp,
-            dest_lat=lat,
-            dest_lon=lon,
+            dest_lat=dest_lat_tmp,
+            dest_lon=dest_lon_tmp,
             departure_date="2025-06-10",
-            departure_time="07:30:00",
+            departure_time="07:00:00",
             main_mode=MAIN_MODEs
         )
+        print(result)
         route_info = processor.extract_route_info(result) # type: ignore
 
         if route_info['status'] == 'success':
@@ -411,7 +407,7 @@ def main(argv: list):
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
     INPUT_FILE = "data/input_od/OD_coordinates_v2.parquet"
     OUTPUT_FILE = f"data/output/OD_travel_times_{"_".join(MAIN_MODEs)}_7AM_5h_spatialDynamic.parquet"
-    OUTPUT_FILE = f"data/output/OUTPUT_DI_PROVA_20250905.parquet"
+    OUTPUT_FILE = f"data/output/travelTimesAndRoutes_allBologna_{"_".join(MAIN_MODEs)}_20250905.parquet"
     
     # Inizializza il processore
     processor = OTPBatchProcessor(OTP_ENDPOINT)
