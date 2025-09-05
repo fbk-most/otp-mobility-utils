@@ -102,7 +102,7 @@ class OTPBatchProcessor:
                      departure_time: str|None = None) -> Optional[Dict]:
         """
         Esegue una singola query GraphQL.
-        Il parametro di main_mode deve essere fornito come una lista di dizionari, es: [{"mode": "CAR")}, {"mode": "WALK"}]
+        Il parametro di main_mode deve essere fornito come una lista di stringhe: es: ["CAR", "WALK"]
         """
         # CORREZIONE 1: Formato corretto per data e ora
         if departure_date is None:
@@ -112,8 +112,10 @@ class OTPBatchProcessor:
 
         # correzione 2  
         modes = [{"mode": "WALK"}]
-        if "CAR" in main_mode:
+        if "CAR_PARK" in main_mode:
             modes.append({"mode": "CAR", "qualifier": "PARK"})
+        if "CAR" in main_mode:
+            modes.append({"mode": "CAR"})
         if "TRANSIT" in main_mode:
             modes.append({"mode": "TRANSIT"})
 
@@ -335,6 +337,12 @@ def test_single_query(args: list):
     MAIN_MODEs = args
     if "WALK" not in MAIN_MODEs:
         MAIN_MODEs = MAIN_MODEs + ["WALK"]
+    for main_mode in args:
+        if main_mode not in ["CAR", "CAR_PARK", "TRANSIT", "WALK"]:
+            raise ValueError("Error: One of the MAIN_MODEs is not in ['CAR', 'CAR_PARK', 'TRANSIT', 'WALK]")
+    if ("CAR" in args) and ("CAR_PARK" in args):
+        raise ValueError("Error: Specify either 'CAR' or 'CAR_PARK', not both.")
+     
 
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql"
     
@@ -387,11 +395,13 @@ def test_single_query(args: list):
     
 def main(argv: list):
     # IO da terminale
-    if len(sys.argv) >= 1:
+    if len(sys.argv) < 1:
         raise ValueError("Error: at least 1 argument needed")
     for main_mode in argv:
-        if main_mode not in ["CAR", "CAR_TO_PARK", "BUS", "TRANSIT", "WALK"]:
-            raise ValueError("Error: One of the MAIN_MODEs is not in ['CAR', 'CAR_TO_PARK', 'BUS', 'TRANSIT', 'WALK]")
+        if main_mode not in ["CAR", "CAR_PARK", "TRANSIT", "WALK"]:
+            raise ValueError("Error: One of the MAIN_MODEs is not in ['CAR', 'CAR_PARK', 'TRANSIT', 'WALK]")
+    if ("CAR" in argv) and ("CAR_PARK" in argv):
+        raise ValueError("Error: Specify either 'CAR' or 'CAR_PARK', not both.")
         
     MAIN_MODEs = argv
     if "WALK" not in MAIN_MODEs:
@@ -400,7 +410,8 @@ def main(argv: list):
     # Configurazione
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
     INPUT_FILE = "data/input_od/OD_coordinates_v2.parquet"
-    OUTPUT_FILE = f"data/output/OD_travel_times_{"_".join(MAIN_MODEs)}_7AM_5hextended.parquet"
+    OUTPUT_FILE = f"data/output/OD_travel_times_{"_".join(MAIN_MODEs)}_7AM_5h_spatialDynamic.parquet"
+    OUTPUT_FILE = f"data/output/OUTPUT_DI_PROVA_20250905.parquet"
     
     # Inizializza il processore
     processor = OTPBatchProcessor(OTP_ENDPOINT)
@@ -432,8 +443,8 @@ def main(argv: list):
         print(f"Durata media: {successful_routes['duration_minutes'].mean():.2f} minuti")
         print(f"Durata minima: {successful_routes['duration_minutes'].min():.2f} minuti")
         print(f"Durata massima: {successful_routes['duration_minutes'].max():.2f} minuti")
-
+        print(results.head(5))
 
 if __name__ == "__main__":
-    #main(argv=sys.argv[1:])
-    test_single_query(args=sys.argv[1:])
+    main(argv=sys.argv[1:])
+    #test_single_query(args=sys.argv[1:])

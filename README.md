@@ -36,14 +36,14 @@ Where:
 
 ## 4. Input Data
 
-To work properly, the following input data are required. See `bologna_preprocessing/README.md` for the details on the methodology of data extraction and manipulation.
+To work properly, the following input data are required. See `preprocessing/README.md` for the details on the methodology of data extraction and manipulation.
 
 ### Infrastructure and service data
 Two are the service data types required for the simulation. 
 
 - `.pbf` file(s) containing the OpenStreetMap road network.
-  - use `bologna-area-filtered-sorted.osm.pbf` for trips, both unimodal and multimodal, considering the current situation. 
-  - use `bologna-area-filtered-inside-AV-footway.osm.pbf` and `bologna-area-filtered-outside-AV-parking.osm.pbf` to force intermodality to enter Area Verde (since provate vehicels are kept outside)
+  - use `bologna-area-filtered-parking-sorted.osm.pbf` for trips, both unimodal and multimodal, considering the current situation. 
+  - use `bologna-area-filtered-parking-inside-AV-footway.osm.pbf` and `bologna-area-filtered-parking-outside-AV.osm.pbf` to force intermodality to enter Area Verde (since provate vehicels are kept outside)
 - `.zip` folder(s) containing the **GTFS schedule**(s) for public transportation.
 
 After their creation, they must be copied and located in the main folder of the project. 
@@ -53,7 +53,6 @@ Located in `data/input_od/`, they represent the start and end points of the trip
 
 
 ## 5. Output Data
-
 The computed travel times are saved in: `data/output/`
 
 
@@ -73,4 +72,4 @@ The computed travel times are saved in: `data/output/`
     -  wheelchairAccessibility  stop onlyConsiderAccessible _set to false_
 
 - `otp-config.json`:
-  Simple switches that enable or disable system-wide features. ????
+  Simple switches that enable or disable system-wide features.

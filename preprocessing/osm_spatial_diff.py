@@ -23,7 +23,7 @@ class IDCollector(osmium.SimpleHandler):
         inside_relation_ids.add(r.id)
 
 print("Raccogliendo ID degli elementi dentro l'area...")
-osmium.apply(osmium.io.Reader('bologna-area-filtered-inside-AV.osm.pbf'), IDCollector())
+osmium.apply(osmium.io.Reader('data/input_service/bologna-area-filtered-parking-inside-AV.osm.pbf'), IDCollector())
 print(f"Trovati {len(inside_node_ids)} nodi, {len(inside_way_ids)} way, {len(inside_relation_ids)} relation dentro l'area")
 
 # Secondo passo: scrivi solo gli elementi che NON sono nel set
@@ -57,9 +57,9 @@ class DiffWriter(osmium.SimpleHandler):
             self.relations_outside += 1
 
 print("Creando file con elementi fuori dall'area...")
-writer = osmium.SimpleWriter('bologna-area-filtered-outside-AV.osm.pbf')
+writer = osmium.SimpleWriter('data/input_service/bologna-area-filtered-parking-outside-AV.osm.pbf')
 diff_handler = DiffWriter(inside_node_ids, inside_way_ids, inside_relation_ids, writer)
-osmium.apply(osmium.io.Reader('bologna-area-filtered-sorted.osm.pbf'), diff_handler)
+osmium.apply(osmium.io.Reader('data/input_service/bologna-area-filtered-parking-sorted.osm.pbf'), diff_handler)
 writer.close()
 
 print(f"Completato! Scritti {diff_handler.nodes_outside} nodi, {diff_handler.ways_outside} way, {diff_handler.relations_outside} relation")

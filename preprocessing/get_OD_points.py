@@ -39,8 +39,6 @@ def prepare_otp_input(file_centroids, file_shape, file_av, file_flows):
 
     od_points_in, od_points_out = read_and_prepare_centroids(file_centroids, file_shape, file_av)
     point_dest_lon, point_dest_lat = find_av_centroid(od_points_out, od_points_in, file_flows)
-    print(point_dest_lon)
-    print(point_dest_lat)
     # Origin point
     df = od_points_out[['lat', 'lon', 'id']].rename(
         columns={'lat':'origin_lat', 'lon':'origin_lon', 'id': 'from'})
@@ -169,12 +167,11 @@ def _OD_flows(
 
 
 if __name__ == '__main__':
-    file_centroids = "../data/input_od/Shape_zone_centroid.SHP"
-    file_shape = "../data/input_od/Shape_zone.SHP"
-    file_av = "../data/input_od/area_verde_manual_v1.geojson"
-    file_flows = "../data/input_od/PROGETTO-OD.xlsx"
+    file_centroids = "data/input_od/Shape_zone_centroid.SHP"
+    file_shape = "data/input_od/Shape_zone.SHP"
+    file_av = "data/input_od/area_verde_manual_v1.geojson"
+    file_flows = "data/input_od/PROGETTO-OD.xlsx"
     df = prepare_otp_input(file_centroids, file_shape, file_av, file_flows)
     
-    print(df.head())
-    file_output = "../data/input_od/OD_coordinates_v2.parquet"
-    df.to_parquet(file_output)
+    file_output = "data/input_od/OD_coordinates_v2.parquet"
+    df.head(10).to_parquet(file_output)

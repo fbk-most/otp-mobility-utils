@@ -57,7 +57,7 @@ class ParkingHandler(osmium.SimpleHandler):
             if not current_park_ride or current_park_ride.lower() == 'no':
                 tag_dict['park_ride'] = 'yes'
                 self.modified_count += 1
-                print(f"Modificato elemento con amenity={amenity}: park_ride -> yes")
+                #print(f"Modificato elemento con amenity={amenity}: park_ride -> yes")
         
         return tag_dict
     
@@ -118,8 +118,8 @@ class ParkingHandler(osmium.SimpleHandler):
 
 def main():
     """Funzione principale."""
-    input_file = "bologna-area-filtered-outside-AV.osm.pbf"
-    output_file = "bologna-area-filtered-outside-AV-parking.osm.pbf"
+    input_file = "data/input_service/bologna-area-filtered.osm.pbf"
+    output_file = "data/input_service/bologna-area-filtered-parking.osm.pbf"
     
     # Verifica che il file di input esista
     if not os.path.exists(input_file):
@@ -145,7 +145,7 @@ def main():
         writer.close()
         
         # Statistiche finali
-        print("-" * 50)
+        print("-" * 80)
         print(f"Elaborazione completata!")
         print(f"Parcheggi totali trovati: {handler.total_parking_count}")
         print(f"Parcheggi modificati: {handler.modified_count}")

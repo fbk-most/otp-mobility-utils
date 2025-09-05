@@ -2,7 +2,7 @@
 
 # Comando osmium completo per filtrare elementi utili allo studio della mobilità
 
-osmium tags-filter bologna-area.osm.pbf \
+osmium tags-filter data/input_service/bologna-area.osm.pbf \
     \
     `# === INFRASTRUTTURA STRADALE ===` \
     w/highway \
@@ -99,10 +99,10 @@ osmium tags-filter bologna-area.osm.pbf \
     nw/lanes=* \
     nw/oneway=* \
     \
-    -o bologna-area-filtered.osm.pbf  --overwrite -f pbf,add_metadata=false
+    -o data/input_service/bologna-area-filtered.osm.pbf  --overwrite -f pbf,add_metadata=false
 
-echo "Filtro completato! File salvato come bologna-area-filtered.osm.pbf"
+echo "Filtro completato! File salvato come bologna-area-filtered.osm.pbf in data/input_service"
 
-original_size=$(du -h bologna-area.osm.pbf | cut -f1)
-filtered_size=$(du -h bologna-area-filtered.osm.pbf | cut -f1)
+original_size=$(du -h data/input_service/bologna-area.osm.pbf | cut -f1)
+filtered_size=$(du -h data/input_service/bologna-area-filtered.osm.pbf | cut -f1)
 echo "Dimensione originale: $original_size → Dimensione filtrata: $filtered_size"
