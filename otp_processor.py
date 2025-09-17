@@ -212,8 +212,10 @@ class OTPBatchProcessor:
         main_mode: list,
         origin_lat_col: str = 'origin_lat', 
         origin_lon_col: str = 'origin_lon',
+        origin_id_col: str = 'from',
         dest_lat_col: str = 'dest_lat', 
         dest_lon_col: str = 'dest_lon',
+        dest_id_col: str = 'to',
         departure_date: str = "2025-06-10",
         departure_time: str = "07:00:00",
         delay_seconds: float = 2.0,
@@ -251,6 +253,8 @@ class OTPBatchProcessor:
                 origin_lon = float(row[origin_lon_col])
                 dest_lat = float(row[dest_lat_col])
                 dest_lon = float(row[dest_lon_col])
+                from_id = int(row[origin_id_col])
+                to_id = int(row[dest_id_col])
             except (ValueError, TypeError) as e:
                 raise RuntimeError(f"Errore lettura coordinate riga {idx}: {e}")
             
@@ -296,8 +300,10 @@ class OTPBatchProcessor:
                 'row_index': idx,
                 'origin_lat': origin_lat,
                 'origin_lon': origin_lon,
+                'from': from_id,
                 'dest_lat': dest_lat,
                 'dest_lon': dest_lon,
+                'to': to_id,
                 'origin_lat_tmp': origin_lat_tmp,
                 'origin_lon_tmp': origin_lon_tmp,
                 'dest_lat_tmp': dest_lat_tmp,
@@ -310,7 +316,7 @@ class OTPBatchProcessor:
             if result_row['status'] != 'success':
                 print(f"Error in line {idx} from ({origin_lat}, {origin_lon}) to ({dest_lat}, {dest_lon}): {result_row['status']}")
             else:
-                print(f"OK in line {idx} from ({origin_lat}, {origin_lon}) to ({dest_lat}, {dest_lon}): {result_row['status']} - {result_row['duration_minutes']}")
+                print(f"OK in line {idx} from ({origin_lat}, {origin_lon}) to ({dest_lat}, {dest_lon}): {result_row['status']} - {result_row['duration_seconds']}")
             
             results.append(result_row)
         
@@ -327,30 +333,19 @@ class OTPBatchProcessor:
         return results_df
 
 
-def test_single_query(args: list):
-    """Funzione per testare una singola query"""
-    MAIN_MODEs = args
+def test_single_query(MAIN_MODEs: list):
+    """
+    Executes a test query to the OpenTripPlanner (OTP) GraphQL endpoint using the specified main travel modes.    
+    """
+
     if "WALK" not in MAIN_MODEs:
         MAIN_MODEs = MAIN_MODEs + ["WALK"]
-    for main_mode in args:
-        if main_mode not in ["CAR", "CAR_PARK", "TRANSIT", "WALK"]:
-            raise ValueError("Error: One of the MAIN_MODEs is not in ['CAR', 'CAR_PARK', 'TRANSIT', 'WALK]")
-    if ("CAR" in args) and ("CAR_PARK" in args):
-        raise ValueError("Error: Specify either 'CAR' or 'CAR_PARK', not both.")
-     
 
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql"
     
     processor = OTPBatchProcessor(OTP_ENDPOINT)
     
     # Test con coordinate di esempio
-    # lat = 44.53083
-    # lon = 11.18020
-    # dest_lat_tmp = 44.46925193255113
-    # dest_lon_tmp = 11.366358609573888
-    # origin_lat_tmp = 44.29138432534488
-    # origin_lon_tmp = 11.085878478293031
-    lat, lon = 44.498149, 11.340096
     dest_lat_tmp, dest_lon_tmp = 44.498149, 11.340096
     origin_lat_tmp, origin_lon_tmp = 44.545637, 11.201394
 
@@ -389,30 +384,37 @@ def test_single_query(args: list):
 
     print(f"Iterazioni prima della convergenza: {n_iter}")
     
-def main(argv: list):
-    # IO da terminale
-    if len(sys.argv) < 1:
-        raise ValueError("Error: at least 1 argument needed")
-    for main_mode in argv:
-        if main_mode not in ["CAR", "CAR_PARK", "TRANSIT", "WALK"]:
-            raise ValueError("Error: One of the MAIN_MODEs is not in ['CAR', 'CAR_PARK', 'TRANSIT', 'WALK]")
-    if ("CAR" in argv) and ("CAR_PARK" in argv):
-        raise ValueError("Error: Specify either 'CAR' or 'CAR_PARK', not both.")
-        
-    MAIN_MODEs = argv
+
+def main(MAIN_MODEs: list):
+    """
+    Processes travel routes using the OpenTripPlanner batch processor based on the specified main modes.
+    Args:
+        MAIN_MODEs (list): List of main travel modes to process. Valid values are "CAR", "CAR_PARK", "TRANSIT", and "WALK".
+    Workflow:
+        - Validates the provided main modes.
+        - Ensures "WALK" is included in the main modes.
+        - Configures OTP endpoint and input/output file paths.
+            - Here, properly set the dataset of ODs and the name of the output file.
+        - Initializes the OTPBatchProcessor.
+        - Processes the dataset for the specified travel modes and parameters.
+            - Inside this step the output of the simulator is found and saved.
+        - Prints statistics about the processed routes, including total, successful, and unsuccessful routes,
+          as well as duration statistics for successful routes.
+    """
+
+    # Fix: eventually add WALK
     if "WALK" not in MAIN_MODEs:
         MAIN_MODEs = MAIN_MODEs + ["WALK"]
 
-    # Configurazione
+    # Configuration
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
-    INPUT_FILE = "data/input_od/OD_coordinates_v2.parquet"
-    OUTPUT_FILE = f"data/output/OD_travel_times_{"_".join(MAIN_MODEs)}_7AM_5h_spatialDynamic.parquet"
-    OUTPUT_FILE = f"data/output/travelTimesAndRoutes_allBologna_{"_".join(MAIN_MODEs)}_20250905.parquet"
+    INPUT_FILE = "data/input_od/OD_coordinates_extended_v2.parquet"
+    OUTPUT_FILE = f"data/output/travelTimesAndRoutes_extended_allBologna_{"_".join(MAIN_MODEs)}_20250917.parquet"
     
-    # Inizializza il processore
+    # Initialize the processor
     processor = OTPBatchProcessor(OTP_ENDPOINT)
     
-    # Processa il dataset
+    # Process the dataset
     results = processor.process_dataset(
         input_file=INPUT_FILE,
         output_file=OUTPUT_FILE,
@@ -428,7 +430,7 @@ def main(argv: list):
         origin_change=True
     )
     
-    # Mostra statistiche
+    # Show statistics
     print(f"\n--- STATISTICHE ---")
     print(f"Totale route processate: {len(results)}")
     print(f"Route trovate: {len(results[results['status'] == 'success'])}")
@@ -436,11 +438,25 @@ def main(argv: list):
     
     if len(results[results['status'] == 'success']) > 0:
         successful_routes = results[results['status'] == 'success']
-        print(f"Durata media: {successful_routes['duration_minutes'].mean():.2f} minuti")
-        print(f"Durata minima: {successful_routes['duration_minutes'].min():.2f} minuti")
-        print(f"Durata massima: {successful_routes['duration_minutes'].max():.2f} minuti")
+        print(f"Durata media: {(successful_routes['duration_seconds'].mean())/60:.2f} minuti")
+        print(f"Durata minima: {(successful_routes['duration_seconds'].min())/60:.2f} minuti")
+        print(f"Durata massima: {(successful_routes['duration_seconds'].max())/60:.2f} minuti")
         print(results.head(5))
 
+
 if __name__ == "__main__":
-    main(argv=sys.argv[1:])
-    #test_single_query(args=sys.argv[1:])
+    # Check IO
+    if len(sys.argv) < 2:
+        raise ValueError("Error: at least 1 argument needed")
+    for main_mode in sys.argv[1:]:
+        if main_mode not in ["CAR", "CAR_PARK", "TRANSIT", "WALK"]:
+            raise ValueError("Error: One of the MAIN_MODEs is not in ['CAR', 'CAR_PARK', 'TRANSIT', 'WALK]")
+    if ("CAR" in sys.argv[1:]) and ("CAR_PARK" in sys.argv[1:]):
+        raise ValueError("Error: Specify either 'CAR' or 'CAR_PARK', not both.")
+
+    # Test a single query
+    test_single_query(MAIN_MODEs=sys.argv[1:])
+    
+    # Process the whole dataset of OD pairs
+    main(MAIN_MODEs=sys.argv[1:])
+
