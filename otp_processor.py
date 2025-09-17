@@ -6,6 +6,8 @@ from datetime import datetime, timezone, date, time
 import time as time_module
 from typing import Dict, List, Optional
 import sys
+from digitalhub_runtime_python import handler
+
 
 QUERY_SIMPLE = """
             query PlanTrip(
@@ -208,7 +210,8 @@ class OTPBatchProcessor:
 
     
     def process_dataset(
-        self, input_file: str, output_file: str, 
+        self, 
+        df,
         main_mode: list,
         origin_lat_col: str = 'origin_lat', 
         origin_lon_col: str = 'origin_lon',
@@ -226,12 +229,6 @@ class OTPBatchProcessor:
         Processa un intero dataset
         """
         # Leggi il dataset
-        try:
-            df = pd.read_parquet(input_file)
-            print(f"Dataset caricato: {len(df)} righe")
-        except Exception as e:
-            raise RuntimeError(f"Errore nel caricare il PARQUET: {e}")
-        
         df.reset_index(drop=True, inplace=True)
         
         # Verifica le colonne richieste
@@ -322,13 +319,6 @@ class OTPBatchProcessor:
         
         # Crea il DataFrame dei risultati
         results_df = pd.DataFrame(results)
-        
-        # Salva i risultati
-        try:
-            results_df.to_parquet(output_file)
-            print(f"Risultati salvati in: {output_file}")
-        except Exception as e:
-            print(f"Errore nel salvare il file: {e}")
             
         return results_df
 
@@ -410,14 +400,20 @@ def main(MAIN_MODEs: list):
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
     INPUT_FILE = "data/input_od/OD_coordinates_extended_v2.parquet"
     OUTPUT_FILE = f"data/output/travelTimesAndRoutes_extended_allBologna_{"_".join(MAIN_MODEs)}_20250917.parquet"
+
+    # Read the dataset
+    try:
+        df = pd.read_parquet(INPUT_FILE)
+        print(f"Dataset caricato: {len(df)} righe")
+    except Exception as e:
+        raise RuntimeError(f"Errore nel caricare il PARQUET: {e}")
     
     # Initialize the processor
     processor = OTPBatchProcessor(OTP_ENDPOINT)
     
     # Process the dataset
     results = processor.process_dataset(
-        input_file=INPUT_FILE,
-        output_file=OUTPUT_FILE,
+        df=df,
         main_mode=MAIN_MODEs,
         origin_lat_col='origin_lat',
         origin_lon_col='origin_lon',
@@ -429,6 +425,13 @@ def main(MAIN_MODEs: list):
         dest_change=True,
         origin_change=True
     )
+
+    # Salva i risultati
+    try:
+        results.to_parquet(OUTPUT_FILE)
+        print(f"Risultati salvati in: {OUTPUT_FILE}")
+    except Exception as e:
+        print(f"Errore nel salvare il file: {e}")
     
     # Show statistics
     print(f"\n--- STATISTICHE ---")
@@ -443,6 +446,60 @@ def main(MAIN_MODEs: list):
         print(f"Durata massima: {(successful_routes['duration_seconds'].max())/60:.2f} minuti")
         print(results.head(5))
 
+
+@handler(outputs=["travelTimesAndRoutes"])
+def main_platform(
+    project, #Already read by the project setting
+    df, #Already obtained from the key parameter given
+    main_modes: list,
+    method: str,
+    zoi: str,
+    version: str,
+):
+    # Fix: eventually add WALK
+    if "WALK" not in main_modes:
+        main_modes = main_modes + ["WALK"]
+
+    # Configuration
+    OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
+    output_file : str = f"data/output/travelTimesAndRoutes_{method}_{zoi}_{"_".join(main_modes)}_{version}"
+    
+    # Initialize the processor
+    processor = OTPBatchProcessor(OTP_ENDPOINT)
+    
+    # Process the dataset
+    results = processor.process_dataset(
+        df=df,
+        main_mode=main_modes,
+        origin_lat_col='origin_lat',
+        origin_lon_col='origin_lon',
+        dest_lat_col='dest_lat',
+        dest_lon_col='dest_lon',
+        departure_date="2025-06-10",  # YYYY-MM-DD format
+        departure_time="07:00:00",  # HH:MM:SS format
+        delay_seconds=1.0,  # Pausa tra le richieste,
+        dest_change=True,
+        origin_change=True
+    )
+
+    # Salva i risultati
+    try:
+        project.log_dataitem(name=output_file, kind="table", source=results, data=results)
+    except Exception as e:
+        print(f"Errore nel salvare il file: {e}")
+    
+    # Show statistics
+    print(f"\n--- STATISTICHE ---")
+    print(f"Totale route processate: {len(results)}")
+    print(f"Route trovate: {len(results[results['status'] == 'success'])}")
+    print(f"Route non trovate: {len(results[results['status'] == 'no_route'])}")
+    
+    if len(results[results['status'] == 'success']) > 0:
+        successful_routes = results[results['status'] == 'success']
+        print(f"Durata media: {(successful_routes['duration_seconds'].mean())/60:.2f} minuti")
+        print(f"Durata minima: {(successful_routes['duration_seconds'].min())/60:.2f} minuti")
+        print(f"Durata massima: {(successful_routes['duration_seconds'].max())/60:.2f} minuti")
+        print(results.head(5))
 
 if __name__ == "__main__":
     # Check IO
