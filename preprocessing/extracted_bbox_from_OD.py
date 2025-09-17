@@ -3,7 +3,7 @@ from shapely.geometry import box
 from shapely.ops import transform
 from pyproj import Transformer, CRS
 
-coord = pd.read_parquet("../data/input_od/OD_coordinates.parquet")
+coord = pd.read_parquet("data/input_od/OD_coordinates.parquet")
 
 min_lat = min(
     coord['origin_lat'].min(),
@@ -27,7 +27,7 @@ max_lon = max(
 
 bounding_box = (float(min_lon), float(min_lat), float(max_lon), float(max_lat))
 
-print("\n🌍 Original bounding box in lon/lat (WGS84):")
+print("\n Original bounding box in lon/lat (WGS84):")
 print(bounding_box)
 #  (10.860721599862547, 44.05630624769124, 12.012741989785605, 44.820050726223485)
 
@@ -46,6 +46,6 @@ bbox_enlarged_projected = bbox_projected.buffer(50000)
 to_wgs84 = Transformer.from_crs(projected_crs, wgs84, always_xy=True).transform
 bbox_enlarged_wgs84 = transform(to_wgs84, bbox_enlarged_projected)
 
-print("\n🌍 Enlarged bounding box in lon/lat (WGS84):")
+print("\n Enlarged bounding box in lon/lat (WGS84) with a 50km buffer:")
 print(bbox_enlarged_wgs84.bounds)
 #(10.734269464357556,43.96629819030445,12.139133497965453,44.91004596649926)

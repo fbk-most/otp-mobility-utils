@@ -1,0 +1,9 @@
+{
+  "build": {
+    "staticCarParkAndRide": true,
+    "matchBusRoutesToStreets": true 
+  ,
+  "parkAndRide": {
+    "maxDistance": 15000
+  }}
+}
