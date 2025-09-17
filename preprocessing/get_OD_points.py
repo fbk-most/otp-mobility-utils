@@ -11,66 +11,112 @@ def read_and_prepare_centroids(file_centroids, file_shape, file_av):
     # Assign av to OD shapes
     av = _AV_shape(file_av)
     od_shape = _OD_shapes(file_shape)
-    od_shape = _OD_to_AV(df_od=od_shape, df_av=av)
 
-    # Merge and filter: OD centers only internal
+    od_shape_inside, od_shape_outside = _OD_to_AV(df_od=od_shape, df_av=av)
+    od_shape_inside['type_av'] = 'inside'
+    od_shape_outside['type_av'] = 'outside'
+
+    od_point_both = gpd.GeoDataFrame(
+        pd.concat([od_shape_inside, od_shape_outside]),
+        crs=CRS_PROJECTED, geometry="geometry"
+    )
+    od_point_both['geometry'] = od_point_both.centroid
+
     od_point = _OD_centers(file_centroids)
-    od_point = od_point.merge(
-        od_shape[['id', 'in_av']], how='inner', on='id'
+    od_point_outside_external = od_point[~od_point['id'].isin(od_shape['id'])]
+    od_point_outside_external['type_av'] = 'outside'
+
+    od_point_both = gpd.GeoDataFrame(
+        pd.concat([od_point_outside_external, od_point_both]),
+        crs=od_point.crs, geometry="geometry"
     )
 
     # Add features: coordx, coordy
-    od_point = od_point.to_crs(CRS_LATLONG)
-    od_point[['lon', 'lat']] = od_point['geometry'].apply(
+    od_point_both = od_point_both.to_crs(CRS_LATLONG)
+    od_point_both[['lon', 'lat']] = od_point_both['geometry'].apply(
         lambda point: pd.Series([point.x, point.y])
     )
-    od_point = od_point.to_crs(CRS_PROJECTED)
-    od_point[['coordx', 'coordy']] = od_point['geometry'].apply(
+    od_point_both = od_point_both.to_crs(CRS_PROJECTED)
+    od_point_both[['coordx', 'coordy']] = od_point_both['geometry'].apply(
         lambda point: pd.Series([point.x, point.y])
     )
     
-    # Distinguish position and return
-    od_points_in = od_point[od_point['in_av']].drop(columns='in_av')
-    od_points_out = od_point[~od_point['in_av']].drop(columns='in_av')
-    return od_points_in, od_points_out
+    # Distinguish position and return & Reset index to avoid duplicate index issues
+    ret_inside = od_point_both[od_point_both['type_av']=='inside'].drop(columns='type_av').reset_index(drop=True)
+    ret_outside = od_point_both[od_point_both['type_av']=='outside'].drop(columns='type_av').reset_index(drop=True)
+    
+    return ret_inside, ret_outside
 
 
-def prepare_otp_input(file_centroids, file_shape, file_av, file_flows):
+def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows):
+    '''
+    Given the zones from the PUMS and the boundary of Area Verde, first it
+    distinguishes between the zones inside and outside the area.
+    Then, a new file is created with all outside zones as origin, and AV as destination
+    TODO: do also the opposite, with AV as origin.
+    '''
 
-    od_points_in, od_points_out = read_and_prepare_centroids(file_centroids, file_shape, file_av)
-    point_dest_lon, point_dest_lat = find_av_centroid(od_points_out, od_points_in, file_flows)
-    # Origin point
-    df = od_points_out[['lat', 'lon', 'id']].rename(
-        columns={'lat':'origin_lat', 'lon':'origin_lon', 'id': 'from'})
+    od_point_in, od_point_out = read_and_prepare_centroids(file_centroids, file_shape, file_av)
 
-    # Dest point 
-    df['dest_lat'] = point_dest_lat
-    df['dest_lon'] = point_dest_lon
+    # Cross join
+    od_point_in["_key"] = 1
+    od_point_out["_key"] = 1
+    df_cross = (
+        pd.merge(od_point_out, od_point_in, on="_key", suffixes=("_from", "_to"))
+        .drop("_key", axis=1)
+        .rename(columns={'id_from': 'from', 'id_to': 'to'})
+    )
 
     # Add flow info
     od_flow = _OD_flows(file_flows)
-    od_flow = od_flow[(od_flow['from'].isin(od_points_out['id'])) & 
-                      (od_flow['to'].isin(od_points_in['id']))]
-    od_flow = od_flow.groupby('from')['flow'].sum().reset_index()
+    df_cross = df_cross.merge(od_flow, how='inner', on=['from', 'to'])
+    
+    # Fix flows, filter non-relevant flows
+    df_cross['flow'] = df_cross['flow'].fillna(0)
+    df_cross['flow'] = df_cross['flow'] * df_cross['ratio_overlap_from'] * df_cross['ratio_overlap_to']
+    df_cross = df_cross[df_cross['flow']>=1]
+
+    return (
+        df_cross
+        .rename(columns={'lat_from': 'origin_lat',
+                        'lon_from': 'origin_lon',
+                        'lat_to': 'dest_lat',
+                        'lon_to': 'dest_lon'})
+        [['origin_lat', 'origin_lon', 'from', 'dest_lat', 'dest_lon', 'to', 'flow']]
+    )
+                             
+
+def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows):
+    '''
+    Given the zones from the PUMS and the boundary of Area Verde, first it
+    distinguishes between the zones inside and outside the area.
+    The ones inside are merged and considered the unique Area Verde. 
+    The ones outside remain as they are.
+    Then, a new file is created with all outside zones as origin, and AV as destination
+    TODO: do also the opposite, with AV as origin.
+    '''
+
+    df = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows)
+    od_points_in, _ = read_and_prepare_centroids(file_centroids, file_shape, file_av)
+    point_av_lon, point_av_lat = find_av_centroid(od_points_in, df)
+   
+    # Dest point 
+    df = df.groupby(["origin_lat", "origin_lon", "from"])["flow"].sum().reset_index()
+    df['dest_lat'] = point_av_lat
+    df['dest_lon'] = point_av_lon
+    df["to"] = 0
+
+    return df[['origin_lat', 'origin_lon', 'from', 'dest_lat', 'dest_lon', 'to', 'flow']]
+
+
+def find_av_centroid(od_points_in, od_flow):
+
+    # Flows
+    df = od_flow.groupby(["dest_lat", "dest_lon", "to"])['flow'].sum().reset_index()
     df = df.merge(
-        od_flow, how='left', on='from'
+        od_points_in[['id', 'coordx', 'coordy']].rename(columns={'id': 'to'}),
+        on='to', how='inner'
     )
-    df['flow'] = df['flow'].fillna(0)
-
-    return df
-
-
-def find_av_centroid(od_points_out, od_points_in, file_flows):
-
-    # Add flow
-    od_flow = _OD_flows(file_flows)
-    od_flow = od_flow[(od_flow['from'].isin(od_points_out['id'])) & 
-                    (od_flow['to'].isin(od_points_in['id']))]
-    od_flow = od_flow.groupby('to')['flow'].sum().reset_index()
-    df = od_points_in.merge(
-        od_flow.rename(columns={'to': 'id'}), how='left', on='id'
-    )
-    df['flow'] = df['flow'].fillna(0)
 
     # Weighted mean
     total_flow = df['flow'].sum()
@@ -120,6 +166,7 @@ def _OD_centers(
         .astype({"id": int, "TYPENO": int, "NAME": pd.StringDtype()})
     )
     df_centers.columns = df_centers.columns.str.lower()
+    df_centers['ratio_overlap'] = 0.0
     return df_centers
 
 
@@ -138,20 +185,22 @@ def _OD_to_AV(
     df_od : gpd.GeoDataFrame, 
     df_av : gpd.GeoDataFrame, 
     overlap_threshold: float = 0.5
-) -> gpd.GeoDataFrame:
+) -> list:
     df_od["area"] = df_od.area
-    areas_intersects = (
+    od_inside = (
         df_od
         .reset_index(drop=True)
         .overlay(df_av[["geometry"]], how="intersection")
     )
-    ratio_overlap = areas_intersects.area / areas_intersects['area']
+    od_inside['ratio_overlap'] = od_inside.area / od_inside['area']
+    od_outside = (
+        df_od
+        .reset_index(drop=True)
+        .overlay(df_av[["geometry"]], how="difference")
+    )
+    od_outside['ratio_overlap'] = od_outside.area / od_outside['area']
 
-    id_ok = areas_intersects[ratio_overlap > overlap_threshold]['id'].values
-    df_od['in_av'] = False
-    df_od.loc[df_od['id'].isin(id_ok), 'in_av'] = True
-
-    return df_od
+    return od_inside.drop(columns="area"), od_outside.drop(columns="area")
 
 
 def _OD_flows(
@@ -171,7 +220,11 @@ if __name__ == '__main__':
     file_shape = "data/input_od/Shape_zone.SHP"
     file_av = "data/input_od/area_verde_manual_v1.geojson"
     file_flows = "data/input_od/PROGETTO-OD.xlsx"
-    df = prepare_otp_input(file_centroids, file_shape, file_av, file_flows)
-    
-    file_output = "data/input_od/OD_coordinates_v2.parquet"
-    df.head(10).to_parquet(file_output)
+    df_extended = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows)
+    df_simple = prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows)
+
+    file_output = "data/input_od/OD_coordinates_extended_v2.parquet"
+    df_extended.to_parquet(file_output)
+
+    file_output = "data/input_od/OD_coordinates_simplified_v2.parquet"
+    df_simple.to_parquet(file_output)
