@@ -261,7 +261,7 @@ class OTPBatchProcessor:
             dest_lon_tmp = dest_lon 
             n_iter=0
                 
-            while not result_found and n_iter < 20:
+            while not result_found and n_iter < 20 and (origin_change or dest_change):
                 # Esegui la query
                 result = self.execute_query(
                     origin_lat=origin_lat_tmp, origin_lon=origin_lon_tmp, 
@@ -447,29 +447,26 @@ def main(MAIN_MODEs: list):
         print(results.head(5))
 
 
-@handler(outputs=["travelTimesAndRoutes"])
 def main_platform(
     project, #Already read by the project setting
     df, #Already obtained from the key parameter given
     main_modes: list,
     method: str,
     zoi: str,
-    version: str,
+    output_name: str,
+    otp_endpoint: str
 ):
+    print("Here in the main_platform")
     # Fix: eventually add WALK
     if "WALK" not in main_modes:
         main_modes = main_modes + ["WALK"]
-
-    # Configuration
-    OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
-    output_file : str = f"data/output/travelTimesAndRoutes_{method}_{zoi}_{"_".join(main_modes)}_{version}"
     
     # Initialize the processor
-    processor = OTPBatchProcessor(OTP_ENDPOINT)
+    processor = OTPBatchProcessor(otp_endpoint)
     
     # Process the dataset
     results = processor.process_dataset(
-        df=df,
+        df=df.as_df(),
         main_mode=main_modes,
         origin_lat_col='origin_lat',
         origin_lon_col='origin_lon',
@@ -484,22 +481,10 @@ def main_platform(
 
     # Salva i risultati
     try:
-        project.log_dataitem(name=output_file, kind="table", source=results, data=results)
+        project.log_dataitem(name=output_name, kind="table", data=results)
     except Exception as e:
         print(f"Errore nel salvare il file: {e}")
-    
-    # Show statistics
-    print(f"\n--- STATISTICHE ---")
-    print(f"Totale route processate: {len(results)}")
-    print(f"Route trovate: {len(results[results['status'] == 'success'])}")
-    print(f"Route non trovate: {len(results[results['status'] == 'no_route'])}")
-    
-    if len(results[results['status'] == 'success']) > 0:
-        successful_routes = results[results['status'] == 'success']
-        print(f"Durata media: {(successful_routes['duration_seconds'].mean())/60:.2f} minuti")
-        print(f"Durata minima: {(successful_routes['duration_seconds'].min())/60:.2f} minuti")
-        print(f"Durata massima: {(successful_routes['duration_seconds'].max())/60:.2f} minuti")
-        print(results.head(5))
+
 
 if __name__ == "__main__":
     # Check IO
