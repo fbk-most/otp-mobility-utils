@@ -6,7 +6,6 @@ from datetime import datetime, timezone, date, time
 import time as time_module
 from typing import Dict, List, Optional
 import sys
-from digitalhub_runtime_python import handler
 
 
 QUERY_SIMPLE = """
@@ -58,6 +57,16 @@ QUERY_COMPLEX = """
                     duration
                     startTime
                     endTime
+                    from {
+                        lat
+                        lon
+                        name
+                    }
+                    to {
+                        lat
+                        lon
+                        name
+                    }
                 }
             }
         }
@@ -73,7 +82,7 @@ class OTPBatchProcessor:
             otp_graphql_endpoint: URL dell'endpoint GraphQL di OTP (es: "http://localhost:8080/otp/gtfs/v1")
         """
         self.endpoint = otp_graphql_endpoint
-        
+        self.request_count = 0
         self.query = QUERY_COMPLEX
     
     def execute_query(self, origin_lat: float, origin_lon: float, 
@@ -99,6 +108,13 @@ class OTPBatchProcessor:
         if "TRANSIT" in main_mode:
             modes.append({"mode": "TRANSIT"})
 
+        # AGGIUNTA ANTI-CACHE: Aggiungi parametri casuali per evitare cache
+        import random
+        cache_buster_params = {
+            "walkReluctance": round(2.0 + random.uniform(-0.05, 0.05), 3),
+            "waitReluctance": round(1.0 + random.uniform(-0.05, 0.05), 3),
+        }
+
         variables = {
             "from": {
                 "lat": float(origin_lat),
@@ -110,7 +126,8 @@ class OTPBatchProcessor:
             },
             "date": str(departure_date),
             "time": str(departure_time),
-            "mode": modes
+            "mode": modes,
+            **cache_buster_params  # Aggiunge parametri anti-cache
         }
 
         payload = {
@@ -118,13 +135,28 @@ class OTPBatchProcessor:
             "variables": variables
         }
         
+        # AGGIUNTA ANTI-CACHE: Nuova sessione ogni 10 richieste
+        self.request_count += 1
+        
         try:
-            response = requests.post(
+            # Crea una nuova sessione con headers anti-cache
+            session = requests.Session()
+            session.headers.update({
+                'Cache-Control': 'no-cache, no-store, must-revalidate',
+                'Pragma': 'no-cache',
+                'Expires': '0',
+                'Content-Type': 'application/json'
+            })
+            
+            response = session.post(
                 self.endpoint,
                 json=payload,
-                headers={"Content-Type": "application/json"},
                 timeout=30
             )
+            
+            # Chiudi la sessione subito dopo l'uso
+            session.close()
+            
             response.raise_for_status()
             result = response.json()
 
@@ -141,6 +173,7 @@ class OTPBatchProcessor:
             print(f"Errore JSON decode: {e}")
             print(f"Response text: {response.text[:500]}...") # type: ignore
             return None
+
     
     def extract_route_info(self, result: Dict) -> Dict:
         """
@@ -336,12 +369,12 @@ def test_single_query(MAIN_MODEs: list):
     processor = OTPBatchProcessor(OTP_ENDPOINT)
     
     # Test con coordinate di esempio
-    dest_lat_tmp, dest_lon_tmp = 44.498149, 11.340096
-    origin_lat_tmp, origin_lon_tmp = 44.545637, 11.201394
+    origin_lat_tmp, origin_lon_tmp = 44.149539641085035, 10.931945636984798
+    dest_lat_tmp, dest_lon_tmp = 44.49700624892967, 11.34416167605513
 
     result_found = False
     n_iter = 0
-    max_iter = 5
+    max_iter = 1
 
     while not result_found and n_iter < max_iter:
         result = processor.execute_query(
@@ -398,12 +431,12 @@ def main(MAIN_MODEs: list):
 
     # Configuration
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
-    INPUT_FILE = "data/input_od/OD_coordinates_extended_v2.parquet"
-    OUTPUT_FILE = f"data/output/travelTimesAndRoutes_extended_allBologna_{"_".join(MAIN_MODEs)}_20250917.parquet"
+    INPUT_FILE = "data/input_od/OD_coordinates_simplified_v2.parquet"
+    OUTPUT_FILE = f"data/output/travelTimesAndRoutes_simplified_restrictedAv_{"_".join(MAIN_MODEs)}_20250926.parquet"
 
     # Read the dataset
     try:
-        df = pd.read_parquet(INPUT_FILE)
+        df = pd.read_parquet(INPUT_FILE)[:5]
         print(f"Dataset caricato: {len(df)} righe")
     except Exception as e:
         raise RuntimeError(f"Errore nel caricare il PARQUET: {e}")
@@ -474,7 +507,7 @@ def main_platform(
         dest_lon_col='dest_lon',
         departure_date="2025-06-10",  # YYYY-MM-DD format
         departure_time="07:00:00",  # HH:MM:SS format
-        delay_seconds=1.0,  # Pausa tra le richieste,
+        delay_seconds=2.0,  # Pausa tra le richieste,
         dest_change=True,
         origin_change=True
     )
