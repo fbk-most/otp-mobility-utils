@@ -178,7 +178,7 @@ class OTPBatchProcessor:
     def extract_route_info(self, result: Dict) -> Dict:
         """
         Estrae le informazioni principali dal risultato della query
-        TODO: add other information on the query related to %time car, %time bus, sequences of car-bus
+        Include ora anche i punti di cambio modalità (lat, lon)
         """
         # Handle the cases with no output
         error_return = {
@@ -193,9 +193,13 @@ class OTPBatchProcessor:
                 'transport_percentages': [],
                 'number_of_transit_transfers': None,
                 'start_time': None,
-                'end_time': None
+                'end_time': None,
+                # NUOVO: punti di cambio modalità
+                'mode_change_points': [],
+                'mode_change_coordinates': [],
+                'mode_change_names': []
             }
-
+    
         if not result or 'data' not in result:
             return error_return
         
@@ -217,16 +221,69 @@ class OTPBatchProcessor:
         transport_modes = []
         transport_durations = []
         transport_percentages = []
-        for leg in legs:
+        
+        # NUOVO: Estrazione punti di cambio modalità
+        mode_change_points = []
+        mode_change_coordinates = []
+        mode_change_names = []
+        
+        for i, leg in enumerate(legs):
             mode = leg.get('mode', 'UNKNOWN')
             transport_modes.append(mode)
-
+    
             duration = leg.get('duration', 0)
             transport_durations.append(duration)
-
+    
             percentage = (duration / total_duration * 100) if total_duration > 0 else 0
             transport_percentages.append(round(percentage, 2))
-
+            
+            # NUOVO: Estrai punti di cambio modalità
+            from_info = leg.get('from', {})
+            to_info = leg.get('to', {})
+            
+            # Il punto di partenza della prima leg
+            if i == 0:
+                mode_change_points.append({
+                    'point_type': 'start',
+                    'lat': from_info.get('lat'),
+                    'lon': from_info.get('lon'),
+                    'name': from_info.get('name', ''),
+                    'mode': mode,
+                    'time': leg.get('startTime')
+                })
+                mode_change_coordinates.append(f"({from_info.get('lat', 0):.6f}, {from_info.get('lon', 0):.6f})")
+                mode_change_names.append(from_info.get('name', 'Start'))
+            
+            # I punti di cambio modalità (fine di una leg, inizio della successiva)
+            if i < len(legs) - 1:
+                next_leg = legs[i + 1]
+                # Verifica se c'è un cambio di modalità
+                if leg['mode'] != next_leg['mode']:
+                    mode_change_points.append({
+                        'point_type': 'transfer',
+                        'lat': to_info.get('lat'),
+                        'lon': to_info.get('lon'),
+                        'name': to_info.get('name', ''),
+                        'from_mode': mode,
+                        'to_mode': next_leg.get('mode', 'UNKNOWN'),
+                        'time': leg.get('endTime')
+                    })
+                    mode_change_coordinates.append(f"({to_info.get('lat', 0):.6f}, {to_info.get('lon', 0):.6f})")
+                    mode_change_names.append(to_info.get('name', f'Transfer_{i}'))
+            
+            # Il punto di arrivo dell'ultima leg
+            if i == len(legs) - 1:
+                mode_change_points.append({
+                    'point_type': 'end',
+                    'lat': to_info.get('lat'),
+                    'lon': to_info.get('lon'),
+                    'name': to_info.get('name', ''),
+                    'mode': mode,
+                    'time': leg.get('endTime')
+                })
+                mode_change_coordinates.append(f"({to_info.get('lat', 0):.6f}, {to_info.get('lon', 0):.6f})")
+                mode_change_names.append(to_info.get('name', 'End'))
+    
         return {
             'status': 'success',
             'duration_seconds': best_itinerary.get('duration'),
@@ -238,7 +295,11 @@ class OTPBatchProcessor:
             'transport_percentages': transport_percentages,
             'number_of_transit_transfers': best_itinerary.get('numberOfTransfers'),
             'start_time': best_itinerary.get('start'),
-            'end_time': best_itinerary.get('end')
+            'end_time': best_itinerary.get('end'),
+            # NUOVO: informazioni sui punti di cambio modalità
+            'mode_change_points': mode_change_points,  # Lista completa con tutti i dettagli
+            'mode_change_coordinates': mode_change_coordinates,  # Lista semplice di coordinate come stringhe
+            'mode_change_names': mode_change_names  # Lista dei nomi dei luoghi
         }
 
     
@@ -254,7 +315,7 @@ class OTPBatchProcessor:
         dest_id_col: str = 'to',
         departure_date: str = "2025-06-10",
         departure_time: str = "07:00:00",
-        delay_seconds: float = 2.0,
+        delay_seconds: float = 5.0,
         origin_change: bool = False,
         dest_change: bool = False
     ) -> pd.DataFrame:
@@ -294,7 +355,7 @@ class OTPBatchProcessor:
             dest_lon_tmp = dest_lon 
             n_iter=0
                 
-            while not result_found and n_iter < 20 and (origin_change or dest_change):
+            while not result_found and n_iter < 10 and (origin_change or dest_change):
                 # Esegui la query
                 result = self.execute_query(
                     origin_lat=origin_lat_tmp, origin_lon=origin_lon_tmp, 
@@ -432,11 +493,11 @@ def main(MAIN_MODEs: list):
     # Configuration
     OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
     INPUT_FILE = "data/input_od/OD_coordinates_simplified_v2.parquet"
-    OUTPUT_FILE = f"data/output/travelTimesAndRoutes_simplified_restrictedAv_{"_".join(MAIN_MODEs)}_20250926.parquet"
+    OUTPUT_FILE = f"data/output/travelTimesAndRoutes_simplified_restrictedAv_{'_'.join(MAIN_MODEs)}_20250926.parquet"
 
     # Read the dataset
     try:
-        df = pd.read_parquet(INPUT_FILE)[:5]
+        df = pd.read_parquet(INPUT_FILE)
         print(f"Dataset caricato: {len(df)} righe")
     except Exception as e:
         raise RuntimeError(f"Errore nel caricare il PARQUET: {e}")
@@ -507,8 +568,8 @@ def main_platform(
         dest_lon_col='dest_lon',
         departure_date="2025-06-10",  # YYYY-MM-DD format
         departure_time="07:00:00",  # HH:MM:SS format
-        delay_seconds=2.0,  # Pausa tra le richieste,
-        dest_change=True,
+        delay_seconds=5.0,  # Pausa tra le richieste,
+        #dest_change=True,
         origin_change=True
     )
 
