@@ -557,6 +557,7 @@ def main_platform(
     
     # Initialize the processor
     processor = OTPBatchProcessor(otp_endpoint)
+    print("Processor initialized")
     
     # Process the dataset
     results = processor.process_dataset(
@@ -572,10 +573,12 @@ def main_platform(
         #dest_change=True,
         origin_change=True
     )
+    print("Processor executed")
 
     # Salva i risultati
     try:
         project.log_dataitem(name=output_name, kind="table", data=results)
+        print("Results saved")
     except Exception as e:
         print(f"Errore nel salvare il file: {e}")
 
