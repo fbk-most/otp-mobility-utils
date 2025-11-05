@@ -23,6 +23,8 @@ class CarRestrictionHandler(osmium.SimpleHandler):
             # MANTIENE il tipo highway originale (primary, secondary, etc.)
             # Aggiunge solo restrizioni per auto e moto
             tags['motorcar'] = 'no'      # Blocca auto private
+            tags['motor_vehicle'] = 'no'      # Blocca auto private
+            tags['bus'] = 'yes'      # Blocca auto private
             tags['motorcycle'] = 'no'    # Blocca moto/scooter
             
             # Permessi espliciti per altri utenti (opzionale ma più chiaro)
