@@ -6,6 +6,10 @@ from datetime import datetime, timezone, date, time
 import time as time_module
 from typing import Dict, List, Optional
 import sys
+import os
+sys.path.append(f"{os.path.expanduser('..')}/src")
+from utils import get_dataframe, put_dataframe, log_dataframe
+from params import local_input, local_output, local_processing, input_coord_file, output_times_file, OTP_ENDPOINT
 
 
 QUERY_SIMPLE = """
@@ -76,7 +80,7 @@ QUERY_COMPLEX = """
 class OTPBatchProcessor:
     def __init__(self, otp_graphql_endpoint: str):
         """
-        Inizializza il processore per OpenTripPlanner
+        Initialize the OpenTripPlanner processor
         
         Args:
             otp_graphql_endpoint: URL dell'endpoint GraphQL di OTP (es: "http://localhost:8080/otp/gtfs/v1")
@@ -86,20 +90,21 @@ class OTPBatchProcessor:
         self.query = QUERY_COMPLEX
     
     def execute_query(self, origin_lat: float, origin_lon: float, 
-                     dest_lat: float, dest_lon: float, main_mode: list,
+                     dest_lat: float, dest_lon: float, 
+                      main_mode: list,
                      departure_date: str|None = None, 
                      departure_time: str|None = None) -> Optional[Dict]:
         """
-        Esegue una singola query GraphQL.
-        Il parametro di main_mode deve essere fornito come una lista di stringhe: es: ["CAR", "WALK"]
+        Execute a single query GraphQL.
+        The argument main_mode must be a list of strings: es: ["CAR", "WALK"]
         """
-        # CORREZIONE 1: Formato corretto per data e ora
+        # FIX 1: Proper format of day and time
         if departure_date is None:
             departure_date = date.today().isoformat()  # "YYYY-MM-DD"
         if departure_time is None:
             departure_time = time(9, 0).isoformat()   # "HH:MM:SS"
 
-        # correzione 2  
+        # FIX 2: modes of transport
         modes = [{"mode": "WALK"}]
         if "CAR_PARK" in main_mode:
             modes.append({"mode": "CAR", "qualifier": "PARK"})
@@ -108,7 +113,7 @@ class OTPBatchProcessor:
         if "TRANSIT" in main_mode:
             modes.append({"mode": "TRANSIT"})
 
-        # AGGIUNTA ANTI-CACHE: Aggiungi parametri casuali per evitare cache
+        # ANTI-CACHE: Add random params to avoid cache
         import random
         cache_buster_params = {
             "walkReluctance": round(2.0 + random.uniform(-0.05, 0.05), 3),
@@ -127,7 +132,7 @@ class OTPBatchProcessor:
             "date": str(departure_date),
             "time": str(departure_time),
             "mode": modes,
-            **cache_buster_params  # Aggiunge parametri anti-cache
+            **cache_buster_params  # Add anti-cache params
         }
 
         payload = {
@@ -135,11 +140,11 @@ class OTPBatchProcessor:
             "variables": variables
         }
         
-        # AGGIUNTA ANTI-CACHE: Nuova sessione ogni 10 richieste
+        # ANTI-CACHE: Every 10 sessions, cache is resetted
         self.request_count += 1
         
         try:
-            # Crea una nuova sessione con headers anti-cache
+            # Create a new session with headers anti-cache
             session = requests.Session()
             session.headers.update({
                 'Cache-Control': 'no-cache, no-store, must-revalidate',
@@ -154,7 +159,7 @@ class OTPBatchProcessor:
                 timeout=30
             )
             
-            # Chiudi la sessione subito dopo l'uso
+            # Close the session after the use
             session.close()
             
             response.raise_for_status()
@@ -194,7 +199,6 @@ class OTPBatchProcessor:
                 'number_of_transit_transfers': None,
                 'start_time': None,
                 'end_time': None,
-                # NUOVO: punti di cambio modalità
                 'mode_change_points': [],
                 'mode_change_coordinates': [],
                 'mode_change_names': []
@@ -222,7 +226,7 @@ class OTPBatchProcessor:
         transport_durations = []
         transport_percentages = []
         
-        # NUOVO: Estrazione punti di cambio modalità
+        # Extract mode change points
         mode_change_points = []
         mode_change_coordinates = []
         mode_change_names = []
@@ -254,7 +258,7 @@ class OTPBatchProcessor:
                 mode_change_coordinates.append(f"({from_info.get('lat', 0):.6f}, {from_info.get('lon', 0):.6f})")
                 mode_change_names.append(from_info.get('name', 'Start'))
             
-            # I punti di cambio modalità (fine di una leg, inizio della successiva)
+            # Points where the mode changes
             if i < len(legs) - 1:
                 next_leg = legs[i + 1]
                 # Verifica se c'è un cambio di modalità
@@ -271,7 +275,7 @@ class OTPBatchProcessor:
                     mode_change_coordinates.append(f"({to_info.get('lat', 0):.6f}, {to_info.get('lon', 0):.6f})")
                     mode_change_names.append(to_info.get('name', f'Transfer_{i}'))
             
-            # Il punto di arrivo dell'ultima leg
+            # Points of arrival
             if i == len(legs) - 1:
                 mode_change_points.append({
                     'point_type': 'end',
@@ -320,22 +324,21 @@ class OTPBatchProcessor:
         dest_change: bool = False
     ) -> pd.DataFrame:
         """
-        Processa un intero dataset
+        Process an entire dataset of OD pairs.
         """
-        # Leggi il dataset
+        # Read the dataset
         df.reset_index(drop=True, inplace=True)
         
-        # Verifica le colonne richieste
+        # Verify that the cols are the required ones
         required_cols = [origin_lat_col, origin_lon_col, dest_lat_col, dest_lon_col]
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
-            raise RuntimeError(f"Colonne mancanti nel PARQUET: {missing_cols}")
+            raise RuntimeError(f"Missing columns in the input file PARQUET: {missing_cols}")
         
-        # Lista per i risultati
+        # List of the results
         results = []
-        percent = 0
         
-        # Processa ogni riga
+        # Process each line (i.e., each OD pair)
         for idx, row in df.iterrows():
             result_found = False
 
@@ -347,7 +350,7 @@ class OTPBatchProcessor:
                 from_id = int(row[origin_id_col])
                 to_id = int(row[dest_id_col])
             except (ValueError, TypeError) as e:
-                raise RuntimeError(f"Errore lettura coordinate riga {idx}: {e}")
+                raise RuntimeError(f"Error reading the coords in line {idx}: {e}")
             
             origin_lat_tmp = origin_lat
             origin_lon_tmp = origin_lon
@@ -356,7 +359,7 @@ class OTPBatchProcessor:
             n_iter=0
                 
             while not result_found and n_iter < 10 and (origin_change or dest_change):
-                # Esegui la query
+                # EsExecute the query
                 result = self.execute_query(
                     origin_lat=origin_lat_tmp, origin_lon=origin_lon_tmp, 
                     dest_lat=dest_lat_tmp, dest_lon=dest_lon_tmp, 
@@ -365,24 +368,24 @@ class OTPBatchProcessor:
                 )
                 route_info = self.extract_route_info(result) # type: ignore
                 
-                # Aggiungi le informazioni al risultato
+                # Add info to the results
                 if route_info['status'] == 'success':
                     result_found = True
 
                 if not result_found and dest_change:
-                    # Se non è stato trovato un percorso, riprova spostando le coordinate di 5*10 m a dx/sx e 5*10m sopra/sotto
+                    # If any path is found, move the dest coords 10m left/right or 10m up/down and try again 
                     lon_plus, lat_plus = random.choice([True, False]), random.choice([True, False])
                     dest_lon_tmp = dest_lon_tmp + 5*0.000127 if lon_plus else dest_lon_tmp - 5*0.000127  # Sposta di 10 metri in longitudine
                     dest_lat_tmp = dest_lat_tmp + 5*0.0000899 if lat_plus else dest_lat_tmp - 5*0.0000899  # Sposta di 10 metri in longitudine
                 
                 if not result_found and origin_change:
-                    # Se non è stato trovato un percorso, riprova spostando le coordinate di 5*10 m a dx/sx e 5*10m sopra/sotto
+                    # If any path is found, move the orig coords 10m left/right or 10m up/down and try again 
                     lon_plus, lat_plus = random.choice([True, False]), random.choice([True, False])
                     origin_lon_tmp = origin_lon_tmp + 5*0.000127 if lon_plus else origin_lon_tmp - 5*0.000127  # Sposta di 10 metri in longitudine
                     origin_lat_tmp = origin_lat_tmp + 5*0.0000899 if lat_plus else origin_lat_tmp - 5*0.0000899  # Sposta di 10 metri in longitudine
                 n_iter += 1
                 
-            # Pausa per non sovraccaricare il server
+            # Pause, not to overload the server
             #print(route_info)
             if delay_seconds > 0:
                 time_module.sleep(delay_seconds)
@@ -417,25 +420,23 @@ class OTPBatchProcessor:
         return results_df
 
 
-def test_single_query(MAIN_MODEs: list):
+def test_single_query(main_modes: list):
     """
     Executes a test query to the OpenTripPlanner (OTP) GraphQL endpoint using the specified main travel modes.    
     """
 
-    if "WALK" not in MAIN_MODEs:
-        MAIN_MODEs = MAIN_MODEs + ["WALK"]
+    if "WALK" not in main_modes:
+        main_modes = main_modes + ["WALK"]
 
-    OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql"
-    
     processor = OTPBatchProcessor(OTP_ENDPOINT)
     
-    # Test con coordinate di esempio
+    # Test with example coords
     origin_lat_tmp, origin_lon_tmp = 44.149539641085035, 10.931945636984798
     dest_lat_tmp, dest_lon_tmp = 44.49700624892967, 11.34416167605513
 
     result_found = False
     n_iter = 0
-    max_iter = 1
+    max_iter = 10
 
     while not result_found and n_iter < max_iter:
         result = processor.execute_query(
@@ -445,7 +446,7 @@ def test_single_query(MAIN_MODEs: list):
             dest_lon=dest_lon_tmp,
             departure_date="2025-06-10",
             departure_time="07:00:00",
-            main_mode=MAIN_MODEs
+            main_mode=main_modes
         )
         print(result)
         route_info = processor.extract_route_info(result) # type: ignore
@@ -454,26 +455,31 @@ def test_single_query(MAIN_MODEs: list):
             result_found = True
 
         if not result_found:
-            # Se non è stato trovato un percorso, riprova spostando le coordinate di 10 m a dx/sx e 10m sopra/sotto
+            # If any path is found, move the coords 10m left/right or 10m up/down and try again 
             lon_plus, lat_plus = random.choice([True, False]), random.choice([True, False])
-            dest_lon_tmp = dest_lon_tmp + 5*0.000127 if lon_plus else dest_lon_tmp - 5*0.000127  # Sposta di 10 metri in longitudine
-            dest_lat_tmp = dest_lat_tmp + 5*0.0000899 if lat_plus else dest_lat_tmp - 5*0.0000899  # Sposta di 10 metri in longitudine
+            dest_lon_tmp = dest_lon_tmp + 5*0.000127 if lon_plus else dest_lon_tmp - 5*0.000127  # Move 10 metri in longitude
+            dest_lat_tmp = dest_lat_tmp + 5*0.0000899 if lat_plus else dest_lat_tmp - 5*0.0000899  # Move 10 metri in latitude
         n_iter += 1
         
-    print("Risultato raw:")
+    print("Raw result:")
     print(json.dumps(result, indent=2)) # type: ignore
     
-    print("\nInformazioni estratte:")
+    print("\nExtracted info:")
     print(route_info) # type: ignore
 
-    print(f"Iterazioni prima della convergenza: {n_iter}")
+    print(f"Iteration before convergence: {n_iter}")
     
 
-def main(MAIN_MODEs: list):
+def main(
+    df,
+    main_modes: list,
+    output_name: str = output_times_file,
+    otp_endpoint: str = OTP_ENDPOINT
+):
     """
     Processes travel routes using the OpenTripPlanner batch processor based on the specified main modes.
     Args:
-        MAIN_MODEs (list): List of main travel modes to process. Valid values are "CAR", "CAR_PARK", "TRANSIT", and "WALK".
+        main_modes (list): List of main travel modes to process. Valid values are "CAR", "CAR_PARK", "TRANSIT", and "WALK".
     Workflow:
         - Validates the provided main modes.
         - Ensures "WALK" is included in the main modes.
@@ -487,28 +493,16 @@ def main(MAIN_MODEs: list):
     """
 
     # Fix: eventually add WALK
-    if "WALK" not in MAIN_MODEs:
-        MAIN_MODEs = MAIN_MODEs + ["WALK"]
+    if "WALK" not in main_modes:
+        main_modes = main_modes + ["WALK"]
 
-    # Configuration
-    OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql" ## Questo funziona
-    INPUT_FILE = "data/input_od/OD_coordinates_simplified_v2.parquet"
-    OUTPUT_FILE = f"data/output/travelTimesAndRoutes_simplified_restrictedAv_{'_'.join(MAIN_MODEs)}_20250926.parquet"
-
-    # Read the dataset
-    try:
-        df = pd.read_parquet(INPUT_FILE)
-        print(f"Dataset caricato: {len(df)} righe")
-    except Exception as e:
-        raise RuntimeError(f"Errore nel caricare il PARQUET: {e}")
-    
     # Initialize the processor
     processor = OTPBatchProcessor(OTP_ENDPOINT)
     
     # Process the dataset
     results = processor.process_dataset(
         df=df,
-        main_mode=MAIN_MODEs,
+        main_mode=main_modes,
         origin_lat_col='origin_lat',
         origin_lon_col='origin_lon',
         dest_lat_col='dest_lat',
@@ -520,24 +514,23 @@ def main(MAIN_MODEs: list):
         origin_change=True
     )
 
-    # Salva i risultati
-    try:
-        results.to_parquet(OUTPUT_FILE)
-        print(f"Risultati salvati in: {OUTPUT_FILE}")
-    except Exception as e:
-        print(f"Errore nel salvare il file: {e}")
+    # Save the results
+    if local_output:
+        put_dataframe(df=results, name=output_times_file, type="parquet")
+    else:
+        log_dataframe(df=results, name=output_times_file)
     
     # Show statistics
-    print(f"\n--- STATISTICHE ---")
-    print(f"Totale route processate: {len(results)}")
-    print(f"Route trovate: {len(results[results['status'] == 'success'])}")
-    print(f"Route non trovate: {len(results[results['status'] == 'no_route'])}")
+    print(f"\n--- STATISTICS ---")
+    print(f"Total routes processed: {len(results)}")
+    print(f"Routes found: {len(results[results['status'] == 'success'])}")
+    print(f"Routes not found: {len(results[results['status'] == 'no_route'])}")
     
     if len(results[results['status'] == 'success']) > 0:
         successful_routes = results[results['status'] == 'success']
-        print(f"Durata media: {(successful_routes['duration_seconds'].mean())/60:.2f} minuti")
-        print(f"Durata minima: {(successful_routes['duration_seconds'].min())/60:.2f} minuti")
-        print(f"Durata massima: {(successful_routes['duration_seconds'].max())/60:.2f} minuti")
+        print(f"Avg. duration: {(successful_routes['duration_seconds'].mean())/60:.2f} minuti")
+        print(f"Min duration: {(successful_routes['duration_seconds'].min())/60:.2f} minuti")
+        print(f"Max duration: {(successful_routes['duration_seconds'].max())/60:.2f} minuti")
         print(results.head(5))
 
 
@@ -545,19 +538,15 @@ def main_platform(
     project, #Already read by the project setting
     df, #Already obtained from the key parameter given
     main_modes: list,
-    method: str,
-    zoi: str,
     output_name: str,
     otp_endpoint: str
 ):
-    print("Here in the main_platform")
     # Fix: eventually add WALK
     if "WALK" not in main_modes:
         main_modes = main_modes + ["WALK"]
     
     # Initialize the processor
     processor = OTPBatchProcessor(otp_endpoint)
-    print("Processor initialized")
     
     # Process the dataset
     results = processor.process_dataset(
@@ -573,12 +562,10 @@ def main_platform(
         #dest_change=True,
         origin_change=True
     )
-    print("Processor executed")
 
     # Salva i risultati
     try:
         project.log_dataitem(name=output_name, kind="table", data=results)
-        print("Results saved")
     except Exception as e:
         print(f"Errore nel salvare il file: {e}")
 
@@ -589,13 +576,14 @@ if __name__ == "__main__":
         raise ValueError("Error: at least 1 argument needed")
     for main_mode in sys.argv[1:]:
         if main_mode not in ["CAR", "CAR_PARK", "TRANSIT", "WALK"]:
-            raise ValueError("Error: One of the MAIN_MODEs is not in ['CAR', 'CAR_PARK', 'TRANSIT', 'WALK]")
+            raise ValueError("Error: One of the main_modes is not in ['CAR', 'CAR_PARK', 'TRANSIT', 'WALK]")
     if ("CAR" in sys.argv[1:]) and ("CAR_PARK" in sys.argv[1:]):
         raise ValueError("Error: Specify either 'CAR' or 'CAR_PARK', not both.")
 
     # Test a single query
-    test_single_query(MAIN_MODEs=sys.argv[1:])
+    test_single_query(main_modes=sys.argv[1:])
     
     # Process the whole dataset of OD pairs
-    main(MAIN_MODEs=sys.argv[1:])
+    df = get_dataframe(name=input_coord_file, local=local_input)
+    main(df=df, main_modes=sys.argv[1:], output_name=output_times_file, otp_endpoint=OTP_ENDPOINT)
 

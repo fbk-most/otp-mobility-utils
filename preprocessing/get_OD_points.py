@@ -1,16 +1,27 @@
+#!/usr/bin/env python3
+"""
+Complete preprocessing pipeline for OD data.
+Executes the steps described in the README in sequence.
+"""
+
 import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 
-CRS_LATLONG = "EPSG:4326"
-CRS_PROJECTED = "EPSG:6875"
-P2V = 0.6265460762750291
+import sys
+import os
+sys.path.append(f"{os.path.expanduser('..')}/src")
+from utils import get_dataframe, put_dataframe, log_dataframe
+from constants import CRS_LATLONG, CRS_PROJECTED, P2V
+from params import local_raw, local_input
 
-
-def read_and_prepare_centroids(file_centroids, file_shape, file_av):
+def read_and_prepare_centroids(file_centroids, file_shape, file_av, local):
     # Assign av to OD shapes
-    av = _AV_shape(file_av)
-    od_shape = _OD_shapes(file_shape)
+    if local:
+        av = _AV_shape(file_av)
+        od_shape = _OD_shapes(file_shape)
+    else:
+        NotImplementedError("Non-local input is not implemented")
 
     od_shape_inside, od_shape_outside = _OD_to_AV(df_od=od_shape, df_av=av)
     od_shape_inside['type_av'] = 'inside'
@@ -48,7 +59,7 @@ def read_and_prepare_centroids(file_centroids, file_shape, file_av):
     return ret_inside, ret_outside
 
 
-def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows):
+def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows, local):
     '''
     Given the zones from the PUMS and the boundary of Area Verde, first it
     distinguishes between the zones inside and outside the area.
@@ -56,7 +67,7 @@ def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows):
     TODO: do also the opposite, with AV as origin.
     '''
 
-    od_point_in, od_point_out = read_and_prepare_centroids(file_centroids, file_shape, file_av)
+    od_point_in, od_point_out = read_and_prepare_centroids(file_centroids, file_shape, file_av, local)
 
     # Cross join
     od_point_in["_key"] = 1
@@ -68,7 +79,10 @@ def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows):
     )
 
     # Add flow info
-    od_flow = _OD_flows(file_flows)
+    if local:
+        od_flow = _OD_flows(file_flows)
+    else:
+        NotImplementedError("Non-local input is not implemented")
     df_cross = df_cross.merge(od_flow, how='inner', on=['from', 'to'])
     
     # Fix flows, filter non-relevant flows
@@ -86,7 +100,7 @@ def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows):
     )
                              
 
-def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows):
+def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows, local):
     '''
     Given the zones from the PUMS and the boundary of Area Verde, first it
     distinguishes between the zones inside and outside the area.
@@ -96,8 +110,8 @@ def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows
     TODO: do also the opposite, with AV as origin.
     '''
 
-    df = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows)
-    od_points_in, _ = read_and_prepare_centroids(file_centroids, file_shape, file_av)
+    df = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows, local)
+    od_points_in, _ = read_and_prepare_centroids(file_centroids, file_shape, file_av, local)
     point_av_lon, point_av_lat = find_av_centroid(od_points_in, df)
    
     # Dest point 
@@ -109,11 +123,15 @@ def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows
     return df[['origin_lat', 'origin_lon', 'from', 'dest_lat', 'dest_lon', 'to', 'flow']]
 
 
-def prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows):
+def prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows, local):
     '''
+    Given the zones from the PUMS and the boundary of Area Verde, first it
+    distinguishes between the zones inside and outside the area. 
+    The ones outside are discarded.
+    Then, a new file is created with all combinations of inside zones as origin and destination
     '''
 
-    od_point_in, od_point_out = read_and_prepare_centroids(file_centroids, file_shape, file_av)
+    od_point_in, _ = read_and_prepare_centroids(file_centroids, file_shape, file_av, local)
 
     # Cross join
     od_point_in["_key"] = 1
@@ -125,7 +143,10 @@ def prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows)
     df_cross = df_cross[df_cross["from"] < df_cross["to"]].reset_index(drop=True)
 
     # Add flow info
-    od_flow = _OD_flows(file_flows)
+    if local:
+        od_flow = _OD_flows(file_flows)
+    else:
+        NotImplementedError("Non-local input is not implemented")
     df_cross = df_cross.merge(od_flow, how='inner', on=['from', 'to'])
     
     # Fix flows, filter non-relevant flows
@@ -249,20 +270,25 @@ def _OD_flows(
     return df_od
 
 
-if __name__ == '__main__':
-    file_centroids = "data/input_od/Shape_zone_centroid.SHP"
-    file_shape = "data/input_od/Shape_zone.SHP"
-    file_av = "data/input_od/area_verde_manual_v1.geojson"
-    file_flows = "data/input_od/PROGETTO-OD.xlsx"  
-
-    # df_extended = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows)
-    # file_output = "data/input_od/OD_coordinates_extended_v2.parquet"
-    # df_extended.to_parquet(file_output)
-
-    # df_simple = prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows)
-    # file_output = "data/input_od/OD_coordinates_simplified_v2.parquet"
-    # df_simple.to_parquet(file_output)
+if __name__ == '__main__':    
+    df_extended = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows, local_raw)
+    file_output = "od-coords-extended"
+    if local_input:
+        put_dataframe(df_extended, name=f"input_od/{file_output}", type="parquet")
+    else:
+        log_dataframe(df_extended, name=file_output)
     
-    df_av = prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows)
-    file_output = "data/input_id/OD_coordinates_inside_av_v2.parquet"
-    df_av.to_parquet()
+    df_simple = prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows, local_raw)
+    file_output = "od-coords-simplified"
+    if local_input:
+        put_dataframe(df_simple, name=f"input_od/{file_output}", type="parquet")
+    else:
+        log_dataframe(df_simple, name=file_output)
+    
+    df_av = prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows, local_raw)
+    file_output = "od-coords-av"
+    if local_input:
+        put_dataframe(df_av, name=f"input_od/{file_output}", type="parquet")
+    else:
+        log_dataframe(df_av, name=file_output)
+    

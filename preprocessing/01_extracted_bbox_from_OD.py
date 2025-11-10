@@ -2,8 +2,18 @@ import pandas as pd
 from shapely.geometry import box
 from shapely.ops import transform
 from pyproj import Transformer, CRS
+from pathlib import Path
 
-coord = pd.read_parquet("data/input_od/OD_coordinates.parquet")
+import sys
+import os
+sys.path.append(f"{os.path.expanduser('.')}/src")
+from params import local_input
+from utils import get_dataframe
+
+name_input = "od-coords-simplified"
+if local_input:
+    name_input = "input_od/" + name_input
+coord = get_dataframe(name=name_input, local=local_input)
 
 min_lat = min(
     coord['origin_lat'].min(),
