@@ -42,11 +42,11 @@ class PreprocessingPipeline:
         bbox = "10.734269464357556,43.96629819030445,12.139133497965453,44.91004596649926"
         self.run_command(
             [
-                "osmium", "extract",
-                "--bbox", bbox,
+                "osmium extract--bbox", 
+                bbox,
                 str(self.data_input_service / "nord-est-latest.osm.pbf"),
-                "--overwrite",
-                "-o", str(self.data_input_service / "bologna-area.osm.pbf")
+                "--overwrite", "-o", 
+                str(self.data_input_service / "bologna-area.osm.pbf")
             ],
             "Step 2: Extract Bologna area with osmium"
         )
@@ -72,8 +72,8 @@ class PreprocessingPipeline:
         # Part 2: Sort and remove duplicates
         self.run_command(
             [
-                "osmium", "sort",
-                "-o", str(self.data_input_service / "bologna-area-filtered-parking-sorted.osm.pbf"),
+                "osmium", "sort", "-o", 
+                str(self.data_input_service / "bologna-area-filtered-parking-sorted.osm.pbf"),
                 str(self.data_input_service / "bologna-area-filtered-parking.osm.pbf"),
                 "--overwrite"
             ],
@@ -123,10 +123,11 @@ class PreprocessingPipeline:
         """Step 6: Extract OSM elements inside the 'Area Verde' polygon"""
         self.run_command(
             [
-                "osmium", "extract",
-                "--polygon", str(self.data_input_service / "small_area_verde_manual_v1.geojson"),
+                "osmium", "extract", "--polygon", 
+                str(self.data_input_service / "small_area_verde_manual_v1.geojson"),
                 str(self.data_input_service / "bologna-area-filtered-parking-sorted.osm.pbf"),
-                "-o", str(self.data_input_service / "bologna-area-filtered-parking-inside-AV.osm.pbf"),
+                "-o", 
+                str(self.data_input_service / "bologna-area-filtered-parking-inside-AV.osm.pbf"),
                 "--overwrite"
             ],
             "Step 6: Extract elements inside Area Verde"
@@ -180,8 +181,8 @@ if __name__ == "__main__":
     try:
         pipeline.run_service_pipeline()
     except KeyboardInterrupt:
-        print("\n\n✗ Pipeline interrupted by user")
+        print("\n\n Pipeline interrupted by user")
         sys.exit(1)
     except Exception as e:
-        print(f"\n\n✗ Unexpected error: {e}")
+        print(f"\n\n Unexpected error: {e}")
         sys.exit(1)
