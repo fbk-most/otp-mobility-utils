@@ -109,6 +109,40 @@ def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows
     return df[['origin_lat', 'origin_lon', 'from', 'dest_lat', 'dest_lon', 'to', 'flow']]
 
 
+def prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows):
+    '''
+    '''
+
+    od_point_in, od_point_out = read_and_prepare_centroids(file_centroids, file_shape, file_av)
+
+    # Cross join
+    od_point_in["_key"] = 1
+    df_cross = (
+        pd.merge(od_point_in, od_point_in,  on="_key", suffixes=("_from", "_to"))
+        .drop("_key", axis=1)
+        .rename(columns={"id_from": "from", "id_to": "to"})
+    )
+    df_cross = df_cross[df_cross["from"] < df_cross["to"]].reset_index(drop=True)
+
+    # Add flow info
+    od_flow = _OD_flows(file_flows)
+    df_cross = df_cross.merge(od_flow, how='inner', on=['from', 'to'])
+    
+    # Fix flows, filter non-relevant flows
+    df_cross['flow'] = df_cross['flow'].fillna(0)
+    df_cross['flow'] = df_cross['flow'] * df_cross['ratio_overlap_from'] * df_cross['ratio_overlap_to']
+    df_cross = df_cross[df_cross['flow']>=1]
+
+    return (
+        df_cross
+        .rename(columns={'lat_from': 'origin_lat',
+                        'lon_from': 'origin_lon',
+                        'lat_to': 'dest_lat',
+                        'lon_to': 'dest_lon'})
+        [['origin_lat', 'origin_lon', 'from', 'dest_lat', 'dest_lon', 'to', 'flow']]
+    )
+
+
 def find_av_centroid(od_points_in, od_flow):
 
     # Flows
@@ -219,12 +253,16 @@ if __name__ == '__main__':
     file_centroids = "data/input_od/Shape_zone_centroid.SHP"
     file_shape = "data/input_od/Shape_zone.SHP"
     file_av = "data/input_od/area_verde_manual_v1.geojson"
-    file_flows = "data/input_od/PROGETTO-OD.xlsx"
-    df_extended = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows)
-    df_simple = prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows)
+    file_flows = "data/input_od/PROGETTO-OD.xlsx"  
 
-    file_output = "data/input_od/OD_coordinates_extended_v2.parquet"
-    df_extended.to_parquet(file_output)
+    # df_extended = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows)
+    # file_output = "data/input_od/OD_coordinates_extended_v2.parquet"
+    # df_extended.to_parquet(file_output)
 
-    file_output = "data/input_od/OD_coordinates_simplified_v2.parquet"
-    df_simple.to_parquet(file_output)
+    # df_simple = prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows)
+    # file_output = "data/input_od/OD_coordinates_simplified_v2.parquet"
+    # df_simple.to_parquet(file_output)
+    
+    df_av = prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows)
+    file_output = "data/input_id/OD_coordinates_inside_av_v2.parquet"
+    df_av.to_parquet()
