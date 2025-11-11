@@ -1,26 +1,13 @@
 #!/usr/bin/env python3
-"""
-Script per modificare un file OSM.pbf aggiungendo park_ride=yes a tutti i parcheggi.
-
-Questo script prende un file OSM.pbf e modifica tutti gli elementi con:
-- amenity=parking
-- amenity=parking_entrance
-- amenity=parking_space
-- amenity=motorcycle_parking
-
-E imposta il tag park_ride=yes per tutti questi elementi.
-"""
-
 import osmium
+from pathlib import Path
 import sys
 import os
+sys.path.append(f"{os.path.expanduser('.')}/src")
+from params import verbose
 
 
 class ParkingHandler(osmium.SimpleHandler):
-    """
-    Handler per processare gli elementi OSM e modificare i tag dei parcheggi.
-    """
-    
     def __init__(self, writer):
         osmium.SimpleHandler.__init__(self)
         self.writer = writer
@@ -115,52 +102,26 @@ class ParkingHandler(osmium.SimpleHandler):
             members=r.members
         ))
 
+def _show_final_stats(handler, input_file: str, output_file: str):
+    print(f"N. parkings found: {handler.total_parking_count}")
+    print(f"N. parkings modified: {handler.modified_count}")
+    original_size = Path(input_file).stat().st_size / (1024 * 1024)
+    filtered_size = Path(output_file).stat().st_size / (1024 * 1024)
+    print(f"Original size: {original_size:.2f} MB → New size: {filtered_size:.2f} MB")
 
-def main():
-    """Funzione principale."""
-    input_file = "data/input_service/bologna-area-filtered.osm.pbf"
-    output_file = "data/input_service/bologna-area-filtered-parking.osm.pbf"
-    
-    # Verifica che il file di input esista
-    if not os.path.exists(input_file):
-        print(f"ERRORE: File di input '{input_file}' non trovato!")
-        print("Assicurati che il file sia nella stessa cartella dello script.")
-        sys.exit(1)
-    
-    print(f"Inizio elaborazione di: {input_file}")
-    print(f"File di output: {output_file}")
-    print("-" * 50)
-    
-    try:
-        # Crea il writer per il file di output
-        writer = osmium.SimpleWriter(output_file)
-        
-        # Crea l'handler
-        handler = ParkingHandler(writer)
-        
-        # Processa il file
-        handler.apply_file(input_file)
-        
-        # Chiude il writer
-        writer.close()
-        
-        # Statistiche finali
-        print("-" * 80)
-        print(f"Elaborazione completata!")
-        print(f"Parcheggi totali trovati: {handler.total_parking_count}")
-        print(f"Parcheggi modificati: {handler.modified_count}")
-        print(f"File salvato come: {output_file}")
-        
-        # Verifica dimensione dei file
-        input_size = os.path.getsize(input_file) / (1024*1024)  # MB
-        output_size = os.path.getsize(output_file) / (1024*1024)  # MB
-        print(f"Dimensione file input: {input_size:.2f} MB")
-        print(f"Dimensione file output: {output_size:.2f} MB")
-        
-    except Exception as e:
-        print(f"ERRORE durante l'elaborazione: {str(e)}")
-        sys.exit(1)
+def add_parkrides(input_file: str, output_file: str):
+    writer = osmium.SimpleWriter(output_file, overwrite=True)
+    handler = ParkingHandler(writer)
+    handler.apply_file(input_file)
+    writer.close()
+    if verbose:
+        _show_final_stats(handler, input_file, output_file)
 
 
 if __name__ == "__main__":
-    main()
+    
+    # Configuration
+    input_file = "data/input_service/bologna-area-filtered.osm.pbf"
+    output_file = "data/input_service/bologna-area-filtered-parking.osm.pbf"
+
+    add_parkrides(input_file, output_file)

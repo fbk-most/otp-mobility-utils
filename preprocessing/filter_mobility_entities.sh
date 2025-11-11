@@ -101,8 +101,8 @@ osmium tags-filter data/input_service/bologna-area.osm.pbf \
     \
     -o data/input_service/bologna-area-filtered.osm.pbf  --overwrite -f pbf,add_metadata=false
 
-echo "Filtro completato! File salvato come bologna-area-filtered.osm.pbf in data/input_service"
+echo "Filtering completed!"
 
 original_size=$(du -h data/input_service/bologna-area.osm.pbf | cut -f1)
 filtered_size=$(du -h data/input_service/bologna-area-filtered.osm.pbf | cut -f1)
-echo "Dimensione originale: $original_size → Dimensione filtrata: $filtered_size"
+echo "Original size: $original_size → Filtered size: $filtered_size"
