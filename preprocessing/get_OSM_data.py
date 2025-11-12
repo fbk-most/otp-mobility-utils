@@ -10,7 +10,7 @@ import osmium
 from shutil import which
 
 from extract_bbox_from_OD import extract_bbox
-from cut_area_with_bbox import cut_area_with_bbox
+from extract_with_pyosmium import extract_bbox_with_pyosmium
 from filter_mobility_entities2 import filter_mobility_entities
 from add_parkrides import add_parkrides
 from sort_entities import sort_entities
@@ -41,7 +41,7 @@ def run_service_pipeline():
 
     """Step 2: Extract Bologna area from regional OSM file using bounding box"""
     print(f"\n► Step 2: Extract Bologna area with osmium")
-    #cut_area_with_bbox(
+    #extract_with_pyosmium(
     #    bbox=bbox, 
     #    input_file=str(data_input_service / "nord-est-latest.osm.pbf"), 
     #    output_file=str(data_input_service / "bologna-area.osm.pbf")
