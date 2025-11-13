@@ -15,6 +15,7 @@ from filter_mobility_entities2 import filter_mobility_entities
 from add_parkrides import add_parkrides
 from sort_entities import sort_entities
 from resize_av import resize_av
+from extract_with_pyosmium import extract_polygon_with_pyosmium
 from extract_elements_inside_outside import extract_elements_inside, extract_elements_outside
 from add_car_restrictions import add_car_restrictions
 
@@ -41,12 +42,12 @@ def run_service_pipeline():
 
     """Step 2: Extract Bologna area from regional OSM file using bounding box"""
     print(f"\n► Step 2: Extract Bologna area with osmium")
-    #extract_with_pyosmium(
-    #    bbox=bbox, 
-    #    input_file=str(data_input_service / "nord-est-latest.osm.pbf"), 
-    #    output_file=str(data_input_service / "bologna-area.osm.pbf")
-    #)
-    # SLOW!! But seems to work well
+    extract_with_pyosmium(
+        bbox=bbox, 
+        input_file=str(data_input_service / "nord-est-latest.osm.pbf"), 
+        output_file=str(data_input_service / "bologna-area.osm.pbf")
+    )
+    # SLOW!! But OK :D
 
     """Step 3: Filter relevant entities (roads and features) for mobility analysis"""
     print(f"\n► Step 3: Filter relevant entities")
@@ -92,16 +93,16 @@ def run_service_pipeline():
         input_geojson=str(data_input_service / "area_verde_manual_v1.geojson"),
         output_geojson=str(data_input_service / "small_area_verde_manual_v1.geojson")
     )
-    # Works well
+    # OK :)
     
     """Step 7: Extract OSM elements inside the 'Area Verde' polygon"""
     print(f"\n► Step 7: Extract OSM elements inside Area Verde")
-    extract_elements_inside(
+    extract_polygon_with_pyosmium(
         polygon_geojson=str(data_input_service / "small_area_verde_manual_v1.geojson"),
         input_pbf=str(data_input_service / "bologna-area-filtered-parking-sorted.osm.pbf"), 
         output_pbf=str(data_input_service / "bologna-area-filtered-parking-inside-AV.osm.pbf")
     )
-    # Keeps too many things
+    # OK :)
 
     """Step 8: Extract OSM elements outside the 'Area Verde' polygon"""
     print(f"\n► Step 8: Extract OSM elements outside Area Verde")
