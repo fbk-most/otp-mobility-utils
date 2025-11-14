@@ -84,16 +84,18 @@ class BackWayForwardReferenceWriter:
         """
         # Part 1: Nodes and Ways
         self.writer_nw.close()
-        self.id_tracker_nw.complete_backward_references(
-            self.ref_src,
-            relation_depth=self.backward_relation_depth_nw
-        )
+        if self.backward_relation_depth_nw > 0:
+            self.id_tracker_nw.complete_backward_references(
+                self.ref_src,
+                relation_depth=self.backward_relation_depth_nw
+            )
 
         # Relations:
         self.writer_r.close()
-        self.id_tracker_r.complete_forward_references(
-            self.ref_src,
-            relation_depth=self.forward_relation_depth_r)
+        if self.forward_relation_depth_r > 0:
+            self.id_tracker_r.complete_forward_references(
+                self.ref_src,
+                relation_depth=self.forward_relation_depth_r)
 
         fp1_nw = osmium.file_processor.FileProcessor(str(Path(self.tmpdir.name, 'back_writer.osm.pbf')))
         fp2_nw = osmium.file_processor.FileProcessor(self.ref_src).with_filter(self.id_tracker_nw.id_filter())
