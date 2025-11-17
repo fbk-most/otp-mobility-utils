@@ -1,3 +1,16 @@
+"""
+Tentative implementation of the tag-filter function from osmium-tool. 
+
+Taken from the osmium-tool documentation: 'All objects matching the expressions will be read from OSM-FILE and written to the output. All objects referenced from those objects will also be added to the output [...]. This applies to nodes referenced in ways and members referenced in relations.'
+https://docs.osmcode.org/osmium/latest/osmium-tags-filter.html
+
+We add to a new file all nodes, ways, and relations that have at least one of the key-tag combinations explicited in the filter file, and we add all of their references through a back-reference writer. The implementation is based on this suggestion from the package author: https://github.com/osmcode/pyosmium/discussions/274
+
+Note: assumptions: nodes are filtered based on the "n*/" lines of the filter file; ways based on the "w*/" lines; relations on the "r*/" lines, and if they are of type "multypolygon" they consider also the "a*/" lines (since they represent areas).
+
+Note: this filter implementation is tested to work with our filters written in filter_expressiosn.sh. However, it is not straightforward that it will work with every filter (e.g., for sure it does not handle "!=" filters, or empty key tags).
+"""
+
 import osmium
 from pathlib import Path
 import sys
@@ -9,9 +22,9 @@ from back_way_forward_reference_writer import BackWayForwardReferenceWriter
 from parse_filter_expression import parse_filter_expression
 
 
-def tag_filter_with_pyosmium2(input_file, output_file, filter_file):
+def our_tags_filter_with_pyosmium(input_file, output_file, filter_file):
     # Read the filters
-    full_filter_n, full_filter_w, full_filter_r, full_filter_a = parse_filter_expression(filter_file)    
+    full_filter_n, full_filter_w, full_filter_r, full_filter_a = parse_filter_expression(filter_file) 
 
     # Use a back-reference writer to guarantee completeness
     writer = osmium.BackReferenceWriter(output_file, ref_src=input_file, overwrite=True)
@@ -27,11 +40,14 @@ def tag_filter_with_pyosmium2(input_file, output_file, filter_file):
     for f in osmium_filters:
         fp = fp.with_filter(f)
     for obj in fp:
-        if obj.is_node() and check_condition(obj.tags, full_filter_n):
-                writer.add_node(obj)
-        elif obj.is_way() and check_condition(obj.tags, full_filter_w):
-                writer.add_way(obj)
-        elif obj.is_relation() and check_condition_relations(obj.tags, full_filter_r, full_filter_a):
+        if obj.is_node():
+            if obj.id == 2416635617:
+                print(obj)
+        if obj.is_node() and _check_condition(obj.tags, full_filter_n):
+            writer.add_node(obj)
+        elif obj.is_way() and _check_condition(obj.tags, full_filter_w):
+            writer.add_way(obj)
+        elif obj.is_relation() and _check_condition_relations(obj.tags, full_filter_r, full_filter_a):
             writer.add_relation(obj)
     print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we are almost closing!") if verbose else None
     writer.close()
@@ -41,14 +57,14 @@ def tag_filter_with_pyosmium2(input_file, output_file, filter_file):
     if verbose:
         _show_stats([0,0,0], input_file, output_file)
 
-def check_condition(tags, filter, pprint=False):
+def _check_condition(tags, filter):
     for t in tags:
         if t.k in filter.keys():
             if (not filter.get(t.k)) or (filter.get(t.k) and t.v in filter.get(t.k)):
                     return True
     return False
 
-def check_condition_relations(tags, filter1, filter2, pprint=False):
+def _check_condition_relations(tags, filter1, filter2):
     additional_check = False
     for t in tags:
         if t.k == "type" and t.v == "multipolygon":
@@ -62,44 +78,6 @@ def check_condition_relations(tags, filter1, filter2, pprint=False):
                 if (not filter2.get(t.k)) or (filter2.get(t.k) and t.v in filter2.get(t.k)):
                         return True
     return False
-
-# class TagFilter(osmium.SimpleHandler):
-#     def __init__(self, writer, filter_n, filter_w, filter_r):
-#         super().__init__()
-#         self.writer = writer
-#         self.filter_n = filter_n
-#         self.filter_w = filter_w
-#         self.filter_r = filter_r
-#         self.n_n = 0
-#         self.n_w = 0
-#         self.n_r = 0
-    
-#     def node(self, n):
-#         tags = {tag.k: tag.v for tag in n.tags if tag.k in self.filter_n.keys()}
-#         for k, v in tags.items():
-#             if self.filter_n.get(k):
-#                 if len(self.filter_n.get(k))==0 or v in self.filter_n.get(k):
-#                     self.writer.add_node(n)
-#                     self.n_n += 1
-#                     return
-
-#     def way(self, w):
-#         tags = {tag.k: tag.v for tag in w.tags if tag.k in self.filter_w.keys()}
-#         for k, v in tags.items():
-#             if self.filter_w.get(k):
-#                 if len(self.filter_w.get(k))==0 or v in self.filter_w.get(k):
-#                     self.writer.add_way(w)
-#                     self.n_w += 1
-#                     return
-    
-#     def relation(self, r):
-#         tags = {tag.k: tag.v for tag in r.tags if tag.k in self.filter_r.keys()}
-#         for k, v in tags.items():
-#             if self.filter_r.get(k):
-#                 if len(self.filter_r.get(k))==0 or v in self.filter_r.get(k):
-#                     self.writer.add_relation(r)
-#                     self.n_r += 1
-#                     return
 
 def _count_elements(input_file: str):
     i_in, i_iw, i_ir = 0, 0, 0
@@ -126,30 +104,11 @@ def _show_stats(n_objects, input_file: str, output_file: str):
     print(f"-> Original size: {original_size:.2f} MB")
     print(f"   New size: {filtered_size:.2f} MB")
 
-# def tag_filter_with_pyosmium(input_file: str, output_file: str, filter_file: str):
-#     # Compute the filters
-#     full_filter_n, full_filter_w, full_filter_r = parse_filter_expression(filter_file)    
-    
-#     # Initialize the writer
-#     writer = osmium.BackReferenceWriter(outfile=output_file, ref_src=input_file, overwrite=True, relation_depth=0)
-
-#     # Perform the filtering
-#     print(f"-> Getting elems \n and it's {datetime.now().strftime('%H:%M:%S')}") if verbose else None
-#     handler = TagFilter(writer, full_filter_n, full_filter_w, full_filter_r)
-#     handler.apply_file(input_file)
-#     n_objects = [handler.n_n, handler.n_w, handler.n_r]
-#     writer.close()
-#     print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we've finished!") if verbose else None
-
-#     # Print stats
-#     if verbose:
-#         _show_stats(n_objects, input_file, output_file)
-
 
 if __name__ == "__main__":
     # Configuration
-    input_file = Path("data_local/input_service/bologna-area.osm.pbf")
+    input_file = Path("data/input_service/bologna-area.osm.pbf")
     output_file = Path("data/input_service/bologna-area-filtered.osm.pbf")
     filter_file = Path("data/input_service/filter_expression.sh")
 
-    tag_filter_with_pyosmium2(str(input_file), str(output_file), str(filter_file))
+    our_tags_filter_with_pyosmium(str(input_file), str(output_file), str(filter_file))

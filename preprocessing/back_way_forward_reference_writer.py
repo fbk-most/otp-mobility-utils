@@ -107,11 +107,8 @@ class BackWayForwardReferenceWriter:
             for o1, o2 in osmium.file_processor.zip_processors(fp1_nw, fp2_nw):
                 if o1:
                     writer.add(o1)
-                elif o2:
-                    if hasattr(o2, 'replace'):
-                        writer.add(o2.replace(tags={}))
-                    else:
-                        writer.add(o2)
+                else:
+                    writer.add(o2)
                         
             for o1, o2 in osmium.file_processor.zip_processors(fp1_r, fp2_r):
                 if o1:

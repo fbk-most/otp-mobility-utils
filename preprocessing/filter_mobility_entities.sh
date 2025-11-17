@@ -32,6 +32,7 @@ osmium tags-filter data/input_service/bologna-area.osm.pbf \
     \
     `# === PARCHEGGI E SOSTA ===` \
     wa/amenity=parking \
+    r/amenity=parking \
     wa/amenity=parking_space \
     wa/amenity=motorcycle_parking \
     wa/amenity=bicycle_parking \

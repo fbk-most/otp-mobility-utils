@@ -16,6 +16,8 @@ import geopandas
 from shapely import wkt
 from pathlib import Path
 from datetime import datetime
+from shapely.geometry import Point
+
 import sys
 import os
 from back_way_forward_reference_writer import BackWayForwardReferenceWriter
@@ -93,7 +95,7 @@ def extract_bbox_with_pyosmium(bbox, input_file: str, output_file: str):
     handler = ExtractInBbox(bbox, writer)
     handler.apply_file(input_file)
     n_objects = [handler.n_nodes, handler.n_ways, handler.n_relations]
-    writer1.close()
+    writer.close()
     print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we've finished!") if verbose else None
 
     # Print info
@@ -133,13 +135,16 @@ class ExtractInPolygon(osmium.SimpleHandler):
             self.writer.add_relation(r)
             self.n_relations += 1
         
-def extract_polygon_with_pyosmium(polygon, input_file: str, output_file: str):
+def extract_polygon_with_pyosmium(polygon_file, input_file: str, output_file: str):
     # Create the writer
     writer = BackWayForwardReferenceWriter(
         outfile=output_file, ref_src=input_file, 
         overwrite=True,
         forward_relation_depth=5, backward_relation_depth=1
     )
+
+    # Read the polygon 
+    polygon = geopandas.read_file(polygon_file).geometry.iloc[0]
 
     # Nodes and Ways
     print(f"-> Getting elements \n and it's {datetime.now().strftime('%H:%M:%S')}") if verbose else None
@@ -153,16 +158,61 @@ def extract_polygon_with_pyosmium(polygon, input_file: str, output_file: str):
     if verbose:
         _show_stats(n_objects, input_file, output_file)
 
+ 
+def extract_polygon_with_pyosmium_no(polygon_file, input_file: str, output_file: str):
+    # Create the writer
+    writer = BackWayForwardReferenceWriter(
+        outfile=output_file, ref_src=input_file, 
+        overwrite=True,
+        forward_relation_depth=5, backward_relation_depth=1
+    )
+
+    # Read the polygon 
+    polygon = geopandas.read_file(polygon_file).geometry.iloc[0]
+
+    # Read the input file -> with geointerfacefilter
+    fp = (
+        osmium.FileProcessor(input_file)
+        .with_locations()
+        .with_filter(osmium.filter.GeoInterfaceFilter())
+    )
+
+    # Iterate: read and write
+    fab = osmium.geom.WKTFactory()
+    n_nodes, n_ways, n_relations = 0,0,0
+    id_tracker = osmium.IdTracker()
+    for o in fp:
+        if o.is_node():
+            wkt_point = fab.create_point(o.location)
+            point = wkt.loads(wkt_point)
+            if polygon.contains(point):
+                writer.add_node(o)
+                n_nodes += 1
+                id_tracker.add_node(o.id)
+        if o.is_way():
+            if id_tracker.contains_any_references(o):
+                writer.add_way(o)
+                n_ways += 1
+                id_tracker.add_way(o.id)
+        if o.is_relation():
+            if id_tracker.contains_any_references(o):
+                writer.add_relation(o)
+                n_relations += 1
+    writer.close()
+
+    if verbose:
+        _show_stats([n_nodes, n_ways, n_relations], input_file, output_file)
+
+
 
 if __name__ == "__main__":
-    input_file = "./data_local/input_service/bologna-area.osm.pbf"
-    output_file = "./data/input_service/test-small-area.osm.pbf"
-    bbox = [11.24269464357556, 44.46629819030445, 11.3133497965453, 44.55004596649926]
-    extract_bbox_with_pyosmium(bbox, input_file, output_file)
+    input_file = "./data/input_service/nord-est-latest.osm.pbf"
+    output_file = "./data/input_service/bologna-area.osm.pbf"
+    bbox = [10.734269464357556,43.96629819030445,12.139133497965453,44.91004596649926]
+    #extract_bbox_with_pyosmium(bbox, input_file, output_file)
     
-    input_file = "./data/input_service/test-small-area.osm.pbf"
-    output_file = "./data/input_service/test-av-small-area.osm.pbf"
-    polygon_file = f"./data/input_service/area_verde_manual_v1.geojson"
-    polygon = geopandas.read_file(polygon_file).geometry.iloc[0]
-    #print(polygon)
-    extract_polygon_with_pyosmium(polygon, input_file, output_file)
+    input_file = "./data/input_service/bologna-area-filtered-parking.osm.pbf"
+    output_file = "./data/input_service/bologna-area-filtered-parking-inside-AV.osm.pbf"
+    polygon_file = f"./data/input_service/small_area_verde_manual_v1.geojson"
+
+    extract_polygon_with_pyosmium(polygon_file, input_file, output_file)
