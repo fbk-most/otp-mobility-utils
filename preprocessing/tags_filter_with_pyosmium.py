@@ -40,9 +40,6 @@ def our_tags_filter_with_pyosmium(input_file, output_file, filter_file):
     for f in osmium_filters:
         fp = fp.with_filter(f)
     for obj in fp:
-        if obj.is_node():
-            if obj.id == 2416635617:
-                print(obj)
         if obj.is_node() and _check_condition(obj.tags, full_filter_n):
             writer.add_node(obj)
         elif obj.is_way() and _check_condition(obj.tags, full_filter_w):
@@ -106,9 +103,16 @@ def _show_stats(n_objects, input_file: str, output_file: str):
 
 
 if __name__ == "__main__":
+    if len(sys.argv) != 4:
+        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 3.")
+        print("Correct usage: python tag_filter_with_pyosmium.py input output filter_file")
+        sys.exit(1)
+    
     # Configuration
-    input_file = Path("data/input_service/bologna-area.osm.pbf")
-    output_file = Path("data/input_service/bologna-area-filtered.osm.pbf")
-    filter_file = Path("data/input_service/filter_expression.sh")
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    filter_file = sys.argv[3]
+    print(f"Executing add_parkrides.py with: \n- input = {input_file}\n- output = {output_file}\n- filter = {filter_file}\n")
 
     our_tags_filter_with_pyosmium(str(input_file), str(output_file), str(filter_file))
+    print("\n")

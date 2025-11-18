@@ -8,6 +8,7 @@ Usage: python osm_road_accessibility_convert.py input.osm.pbf output.osm.pbf
 
 import osmium
 from pathlib import Path
+from datetime import datetime
 import sys
 import os
 sys.path.append(f"{os.path.expanduser('.')}/src")
@@ -58,13 +59,6 @@ class CarRestrictionHandler(osmium.SimpleHandler):
                 if tag in tags:
                     del tags[tag]
             
-            # KEEP useful tags:
-            # - ref (road number)
-            # - name (road name)
-            # - surface, width (useful for pedestrians/bikes)
-            # - oneway (can also apply to bikes)
-            # - cycleway, sidewalk (still relevant)
-            
             # Create the new way with restrictions
             new_way = w.replace(tags=tags)
             self.writer.add_way(new_way)
@@ -101,14 +95,24 @@ def _count_elements(input_file: str):
 def add_car_restrictions(input_file: str, output_file: str):
     writer = osmium.SimpleWriter(output_file, overwrite=True)
     handler = CarRestrictionHandler(writer)
+    print(f"-> Getting elems \n and it's {datetime.now().strftime('%H:%M:%S')}") if verbose else None
     handler.apply_file(input_file)
     writer.close()
+    print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we finished") if verbose else None
     if verbose:
         _show_print(handler, input_file, output_file)
 
 
 if __name__ == "__main__":
-    input_file = "data/input_service/bologna-area-filtered-parking-inside-AV.osm.pbf"
-    output_file = "data/input_service/bologna-area-filtered-parking-inside-AV-footway.osm.pbf"
+    if len(sys.argv) != 3:
+        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 2.")
+        print("Correct usage: python add_car_restrictions.py input output")
+        sys.exit(1)
+    
+    # Configuration
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    print(f"Executing add_car_restrictions.py with: \n- input = {input_file}\n- output = {output_file}\n")
 
     add_car_restrictions(input_file, output_file)
+    print("\n")

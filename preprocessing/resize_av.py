@@ -12,6 +12,15 @@ def resize_av(input_geojson: str, output_geojson: str):
 
 
 if __name__ == "__main__":
-    input_file = "data/input_service/area_verde_manual_v1.geojson"
-    output_file = "data/input_service/small_area_verde_manual_v1.geojson"
+    if len(sys.argv) != 3:
+        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 2.")
+        print("Correct usage: python resize_av.py input output")
+        sys.exit(1)
+    
+    # Configuration
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    print(f"Executing resize_av.py with: \n- input = {input_file}\n- output = {output_file}\n")
+
     resize_av(input_geojson=input_file, output_geojson=output_file)
+    print("\n")

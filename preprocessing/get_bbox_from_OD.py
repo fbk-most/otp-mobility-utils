@@ -11,7 +11,7 @@ from utils import get_dataframe
 from constants import N_CRS_PROJECTED, N_CRS_LATLONG
 
 
-def extract_bbox(name_input: str, enlarged: bool = False):
+def get_bbox(name_input: str, enlarged: bool = False):
     # Read the file of coordinates
     coord = get_dataframe(name=name_input, local=local_input)
 
@@ -23,7 +23,7 @@ def extract_bbox(name_input: str, enlarged: bool = False):
     
     bounding_box = (float(min_lon), float(min_lat), float(max_lon), float(max_lat))
     
-    print("\n Original bounding box in lon/lat (WGS84):") if verbose else None
+    print("Original bounding box in lon/lat (WGS84):") if verbose else None
     print(bounding_box) if verbose else None
 
     if not enlarged:
@@ -51,6 +51,7 @@ def extract_bbox(name_input: str, enlarged: bool = False):
 
 if __name__ == "__main__":
     name_input = "od-coords-extended"
-    extract_bbox(name_input, enlarged=False)
+    get_bbox(name_input, enlarged=False)
     # (10.860721599862547, 44.05630624769124, 12.012741989785605, 44.820050726223485)
     # (10.734269464357556,43.96629819030445,12.139133497965453,44.91004596649926)
+    print("\n")

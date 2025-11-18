@@ -206,13 +206,24 @@ def extract_polygon_with_pyosmium_no(polygon_file, input_file: str, output_file:
 
 
 if __name__ == "__main__":
-    input_file = "./data/input_service/nord-est-latest.osm.pbf"
-    output_file = "./data/input_service/bologna-area.osm.pbf"
-    bbox = [10.734269464357556,43.96629819030445,12.139133497965453,44.91004596649926]
-    #extract_bbox_with_pyosmium(bbox, input_file, output_file)
-    
-    input_file = "./data/input_service/bologna-area-filtered-parking.osm.pbf"
-    output_file = "./data/input_service/bologna-area-filtered-parking-inside-AV.osm.pbf"
-    polygon_file = f"./data/input_service/small_area_verde_manual_v1.geojson"
+    if len(sys.argv) != 4:
+        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 2.")
+        print("Correct usage 1: python extract_with_pyosmium.py lon1,lat1,lon2,lat2 input output")
+        print("Correct usage 2: python extract_with_pyosmium.py polygon.geojson input output")
+        sys.exit(1)
+        
+    first_arg = sys.argv[1]
+    input_file = sys.argv[2]
+    output_file = sys.argv[3]
 
-    extract_polygon_with_pyosmium(polygon_file, input_file, output_file)
+    # Extract inside a polygon
+    if first_arg.endswith('.geojson'):
+        print(f"Executing resize_av.py with: \n- polygon = {first_arg}\n- input = {input_file}\n- output = {output_file}\n")
+        extract_polygon_with_pyosmium(first_arg, input_file, output_file)
+
+    # Extract inside a boox
+    else:
+        first_arg = [float(i) for i in first_arg.split(",")]
+        print(f"Executing resize_av.py with: \n- bbox = {first_arg}\n- input = {input_file}\n- output = {output_file}\n")
+        extract_bbox_with_pyosmium(first_arg, input_file, output_file)
+    print("\n")

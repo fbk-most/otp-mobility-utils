@@ -87,15 +87,14 @@ class ParkingHandler(osmium.SimpleHandler):
         ))
 
 def _show_final_stats(handler, input_file: str, output_file: str):
-    print(f"N. parkings found: {handler.total_parking_count}")
-    print(f"N. parkings modified: {handler.modified_count}")
+    print(f"-> N. parkings found: {handler.total_parking_count}; N. parkings modified: {handler.modified_count}")
     
     original_size = Path(input_file).stat().st_size / (1024 * 1024)
     filtered_size = Path(output_file).stat().st_size / (1024 * 1024)
-    print(f"Original size: {original_size:.2f} MB → New size: {filtered_size:.2f} MB")
+    print(f"-> Original size: {original_size:.2f} MB; New size: {filtered_size:.2f} MB")
 
-    print(f"Elements in the original file: {_count_elements(input_file)}")
-    print(f"Elements in the new file: {_count_elements(output_file)}")
+    print(f"-> Elements in the original file: {_count_elements(input_file)}")
+    print(f"   Elements in the new file: {_count_elements(output_file)}")
     
 
 def add_parkrides(input_file: str, output_file: str):
@@ -121,9 +120,15 @@ def _count_elements(input_file: str):
     
 
 if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 2.")
+        print("Correct usage: python add_parkrides.py input output")
+        sys.exit(1)
     
     # Configuration
-    input_file = "data/input_service/bologna-area-filtered.osm.pbf"
-    output_file = "data/input_service/bologna-area-filtered-parking.osm.pbf"
+    input_file = sys.argv[1]
+    output_file = sys.argv[2]
+    print(f"Executing add_parkrides.py with: \n- input = {input_file}\n- output = {output_file}\n")
 
     add_parkrides(input_file, output_file)
+    print("\n")

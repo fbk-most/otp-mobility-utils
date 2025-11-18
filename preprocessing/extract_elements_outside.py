@@ -73,9 +73,16 @@ def _show_file_sizes(input_file_container: str, input_file_contained: str, outpu
 
 
 if __name__ == "__main__":
-    # Configure input and output files
-    input_file_container = "data/input_service/bologna-area-filtered-parking.osm.pbf"
-    input_file_contained = "data/input_service/bologna-area-filtered-parking-inside-AV.osm.pbf"
-    output_file = "data/input_service/bologna-area-filtered-parking-outside-AV.osm.pbf"
+    if len(sys.argv) != 4:
+        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 3.")
+        print("Correct usage: python extract_elements_outside.py input_container input_contained output")
+        sys.exit(1)
+    
+    # Configuration
+    input_file_container = sys.argv[1]
+    input_file_contained = sys.argv[2]
+    output_file = sys.argv[3]
+    print(f"Executing add_parkrides.py with: \n- input_container = {input_file_container}\n- input_contained = {input_file_contained}\n- output = {output_file}\n")
 
     extract_elements_outside(input_file_container, input_file_contained, output_file)
+    print("\n")

@@ -2,8 +2,7 @@
 
 echo "\nSERVICE DATA PIPELINE START"
 
-
-echo "Step 2: Extract Bologna area from regional OSM file using bounding box"
+echo "► Step 2: Extract Bologna area from regional OSM file using bounding box"
 
 osmium extract \
     --bbox 10.734269464357556,43.96629819030445,12.139133497965453,44.91004596649926 \
@@ -11,7 +10,7 @@ osmium extract \
     --overwrite -o data/input_service/bologna-area.osm.pbf
     
 
-echo "Step 3: Filter relevant entities (roads and features) for mobility analysis"
+echo "► Step 3: Filter relevant entities (roads and features) for mobility analysis"
 
 osmium tags-filter \
     data/input_service/bologna-area.osm.pbf \
@@ -19,12 +18,14 @@ osmium tags-filter \
     -o data/input_service/bologna-area-filtered-with-osmiumtool.osm.pbf --overwrite -f pbf,add_metadata=false
 
 
-echo "Step 4: Correct parking data to enable park-and-ride intermodality"
+echo "► Step 4: Correct parking data to enable park-and-ride intermodality"
 
-python preprocessing/add_parkrides.py
+python preprocessing/add_parkrides.py \
+    data/input_service/bologna-area-filtered.osm.pbf \
+    data/input_service/bologna-area-filtered-parking.osm.pbf
 
 
-echo "Step 5: Apply negative 250m buffer to 'Area Verde' zone"
+echo "► Step 5: Apply negative 250m buffer to 'Area Verde' zone"
 
 ogr2ogr \
     -f GeoJSON data/input_service/area_verde_manual_v1_utm.geojson \
@@ -44,7 +45,7 @@ ogr2ogr \
 
 echo "\nADDITIONAL STEPS FOR INTERMODALITY ANALYSIS"
 
-echo "Step 6: Extract OSM elements inside the 'Area Verde' polygon"
+echo "► Step 6: Extract OSM elements inside the 'Area Verde' polygon"
 
 osmium extract \
     --polygon data/input_service/small_area_verde_manual_v1.geojson \
@@ -52,13 +53,19 @@ osmium extract \
     -o data/input_service/bologna-area-filtered-parking-inside-AV.osm.pbf --overwrite
 
 
-echo "Step 7 : Extract OSM elements outside the 'Area Verde' polygon"
+echo "► Step 7 : Extract OSM elements outside the 'Area Verde' polygon"
 
-python preprocessing/osm_spatial_diff.py
+python preprocessing/extract_elements_outside.py \
+    data/input_service/bologna-area-filtered-parking.osm.pbf \
+    data/input_service/bologna-area-filtered-parking-inside-AV.osm.pbf \
+    data/input_service/bologna-area-filtered-parking-outside-AV.osm.pbf
 
 
-echo "Step 8: Add car restrictions to entering in the Area Verde"
+echo "► Step 8: Add car restrictions to entering in the Area Verde"
 
-python preprocessing/osm_convert_road_accessibility.py \
+python preprocessing/add_car_restrictions.py \
     data/input_service/bologna-area-filtered-parking-inside-AV.osm.pbf \
     data/input_service/bologna-area-filtered-parking-inside-AV-footway.osm.pbf 
+
+
+echo "\nPIPELINE END\n"

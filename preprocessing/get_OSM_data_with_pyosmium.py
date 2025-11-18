@@ -7,9 +7,8 @@ import subprocess
 import sys
 from pathlib import Path
 import osmium
-from shutil import which
 
-from extract_bbox_from_OD import extract_bbox
+from get_bbox_from_OD import get_bbox
 from extract_with_pyosmium import extract_bbox_with_pyosmium
 from tags_filter_with_pyosmium import our_tags_filter_with_pyosmium
 from add_parkrides import add_parkrides
@@ -22,68 +21,62 @@ base_dir = Path(".")
 data_input_service = base_dir / "data" / "input_service"
 data_input_od = base_dir / "data" / "input_od"
 preprocessing_dir = base_dir / "preprocessing"
-which_osmium = which("osmium") is not None
 
 
 def run_service_pipeline():
     """Execute the complete service data pipeline"""
     print("\n" + "="*60)
     print("SERVICE DATA PIPELINE START")
-    print("="*60 + "\n")
+    print("="*60)
     
     """Step 1: Extract bounding box from OD coordinates"""
     print(f"\n► Step 1: Extract bounding box from OD coordinates")
-    bbox = extract_bbox(
+    bbox = get_bbox(
         name_input=str("od-coords-simplified"),
         enlarged=False
     )
     bbox = [10.734269464357556,43.96629819030445,12.139133497965453,44.91004596649926]
 
-    """Step 2: Extract Bologna area from regional OSM file using bounding box"""
-    # print(f"\n► Step 2: Extract Bologna area with osmium")
-    # extract_bbox_with_pyosmium(
-    #     bbox=bbox, 
-    #     input_file=str(data_input_service / "nord-est-latest.osm.pbf"), 
-    #     output_file=str(data_input_service / "bologna-area.osm.pbf")
-    # )
-    # # SLOW!! But OK :D
+    """Step 2: Extract elements in the bbox of the Bologna area from the regional OSM file"""
+    print(f"\n► Step 2: Extract entities in the bbox (i.e., Bologna area)")
+    extract_bbox_with_pyosmium(
+        bbox=bbox, 
+        input_file=str(data_input_service / "nord-est-latest.osm.pbf"), 
+        output_file=str(data_input_service / "bologna-area.osm.pbf")
+    )
 
-    # """Step 3: Filter relevant entities (roads and features) for mobility analysis"""
-    # print(f"\n► Step 3: Filter relevant entities")
-    # our_tags_filter_with_pyosmium(
-    #     input_file=str(data_input_service / "bologna-area.osm.pbf"), 
-    #     output_file=str(data_input_service / "bologna-area-filtered.osm.pbf"),
-    #     filter_file=str(data_input_service / "filter_expression.sh")
+    """Step 3: Filter relevant entities (roads and features) for mobility analysis"""
+    print(f"\n► Step 3: Filter relevant entities in the area")
+    our_tags_filter_with_pyosmium(
+        input_file=str(data_input_service / "bologna-area.osm.pbf"), 
+        output_file=str(data_input_service / "bologna-area-filtered.osm.pbf"),
+        filter_file=str(data_input_service / "filter_expression.sh")
         
-    # )
-    # # SLOW!! But OK :D 
+    )
 
     """
-    # Step 4: Correct parking data to enable park-and-ride intermodality.
-    # Tags all parkings as park-and-ride facilities and removes duplicates.
-    # """
-    # print(f"\n► Step 4: Correct parking features")
-    # add_parkrides(
-    #     input_file=str(data_input_service / "bologna-area-filtered.osm.pbf"),
-    #     output_file=str(data_input_service / "bologna-area-filtered-parking.osm.pbf")
-    # )
-    # # Works well
+    Step 4: Correct parking data to enable park-and-ride intermodality.
+    Tags all parkings as park-and-ride facilities and removes duplicates.
+    """
+    print(f"\n► Step 4: Correct parking features")
+    add_parkrides(
+        input_file=str(data_input_service / "bologna-area-filtered.osm.pbf"),
+        output_file=str(data_input_service / "bologna-area-filtered-parking.osm.pbf")
+    )
     
-
     print("\n" + "="*60)
     print("ADDITIONAL STEPS FOR INTERMODALITY ANALYSIS")
     print("="*60)
     
-    # '''
-    # Step 5: Apply negative 250m buffer to 'Area Verde' zone.
-    # This defines a reduced zone for accessibility restrictions.
-    # '''
-    # print(f"\n► Step 5: Reduce the size of Area Verde")
-    # resize_av(
-    #     input_geojson=str(data_input_service / "area_verde_manual_v1.geojson"),
-    #     output_geojson=str(data_input_service / "small_area_verde_manual_v1.geojson")
-    # )
-    # # OK :)
+    '''
+    Step 5: Apply negative 250m buffer to 'Area Verde' zone.
+    This defines a reduced zone for accessibility restrictions.
+    '''
+    print(f"\n► Step 5: Reduce the size of Area Verde")
+    resize_av(
+        input_geojson=str(data_input_service / "area_verde_manual_v1.geojson"),
+        output_geojson=str(data_input_service / "small_area_verde_manual_v1.geojson")
+    )
     
     """Step 6: Extract OSM elements inside the 'Area Verde' polygon"""
     print(f"\n► Step 6: Extract OSM elements inside Area Verde")
@@ -92,7 +85,6 @@ def run_service_pipeline():
         input_file=str(data_input_service / "bologna-area-filtered-parking.osm.pbf"), 
         output_file=str(data_input_service / "bologna-area-filtered-parking-inside-AV.osm.pbf")
     )
-    # OK :)
 
     """Step 7: Extract OSM elements outside the 'Area Verde' polygon"""
     print(f"\n► Step 7: Extract OSM elements outside Area Verde")
@@ -101,9 +93,8 @@ def run_service_pipeline():
         input_file_contained=str(data_input_service / "bologna-area-filtered-parking-inside-AV.osm.pbf"),
         output_file=str(data_input_service / "bologna-area-filtered-parking-outside-AV.osm.pbf")
     )
-    # Keeps too many thinks
 
-    """Step 8: Add car restrictions to entering in the Area Verde"""
+    """Step 8: Add car restrictions to entering in the 'Area Verde'"""
     print(f"\n► Step 8: Extract OSM elements outside Area Verde")
     add_car_restrictions(
         input_file=data_input_service / "bologna-area-filtered-parking-inside-AV.osm.pbf",
