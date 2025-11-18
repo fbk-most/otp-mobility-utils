@@ -2,6 +2,8 @@ local_raw: bool = True
 local_input: bool = False
 local_processing: bool = True
 
+verbose: bool = True
+
 file_centroids: str = "data/input_od/Shape_zone_centroid.SHP"
 file_shape: str = "data/input_od/Shape_zone.SHP"
 file_av: str = "data/input_od/area_verde_manual_v1.geojson"
