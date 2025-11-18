@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo "\nSERVICE DATA PIPELINE START"
+echo "SERVICE DATA PIPELINE START"
 
 echo "► Step 2: Extract Bologna area from regional OSM file using bounding box"
 
@@ -15,7 +15,7 @@ echo "► Step 3: Filter relevant entities (roads and features) for mobility ana
 osmium tags-filter \
     data/input_service/bologna-area.osm.pbf \
     -e data/input_service/filter_expression.sh \
-    -o data/input_service/bologna-area-filtered-with-osmiumtool.osm.pbf --overwrite -f pbf,add_metadata=false
+    -o data/input_service/bologna-area-filtered.osm.pbf --overwrite -f pbf,add_metadata=false
 
 
 echo "► Step 4: Correct parking data to enable park-and-ride intermodality"
@@ -43,13 +43,13 @@ ogr2ogr \
     -t_srs EPSG:4326
 
 
-echo "\nADDITIONAL STEPS FOR INTERMODALITY ANALYSIS"
+echo "ADDITIONAL STEPS FOR INTERMODALITY ANALYSIS"
 
 echo "► Step 6: Extract OSM elements inside the 'Area Verde' polygon"
 
 osmium extract \
     --polygon data/input_service/small_area_verde_manual_v1.geojson \
-    data/input_service/bologna-area-filtered-parking-sorted.osm.pbf \
+    data/input_service/bologna-area-filtered-parking.osm.pbf \
     -o data/input_service/bologna-area-filtered-parking-inside-AV.osm.pbf --overwrite
 
 
@@ -68,4 +68,4 @@ python preprocessing/add_car_restrictions.py \
     data/input_service/bologna-area-filtered-parking-inside-AV-footway.osm.pbf 
 
 
-echo "\nPIPELINE END\n"
+echo "PIPELINE END"
