@@ -16,7 +16,7 @@ version: str = "20251011"
 
 modes_str =  "_".join(modes)
 
-input_coord_file: str = f"od-coords-{zoi}"
+input_coord_file: str = f"od-coords-{method}"
 if local_input:
     input_coord_file = "input_od/" + input_coord_file
 
