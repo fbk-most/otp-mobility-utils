@@ -14,7 +14,7 @@ sys.path.append(f"{os.path.expanduser('.')}/src")
 from utils import get_dataframe, put_dataframe, log_dataframe
 from constants import CRS_LATLONG, CRS_PROJECTED, P2V
 from params import local_raw, local_input, verbose
-from params import local_raw, local_input, file_centroids, file_shape, file_av, file_flows
+from params import file_centroids, file_shape, file_av, file_flows
 
 
 def read_and_prepare_centroids(file_centroids, file_shape, file_av, local):
@@ -69,14 +69,18 @@ def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows, 
         .drop("_key", axis=1)
         .rename(columns={'id_from': 'from', 'id_to': 'to'})
     )
+    df_cross = df_cross[(df_cross["from"]!=df_cross["to"])]
 
     # Add flow info
     od_shapes = gpd.GeoDataFrame(pd.concat([od_point_in, od_point_out]), geometry="geometry")
     od_flow = _AOI_flows(file_flows, od_shapes)
+    od_flow = od_flow[(od_flow["type_av_from"]=="outside")&(od_flow["type_av_to"]=="inside")].reset_index(drop=True)
+    od_flow = od_flow.drop(columns={"type_av_from", "type_av_to"})
+    od_flow = od_flow[(od_flow["from"]!=od_flow["to"])]
 
     df_cross["from"] = df_cross["from"].astype(int)
     df_cross["to"] = df_cross["to"].astype(int)
-    df_cross = df_cross.merge(od_flow, how='inner', on=['from', 'to'])
+    df_cross = df_cross.merge(od_flow, how='left', on=['from', 'to'])
     # df_cross = df_cross[df_cross['flow']>=1]
 
     # Rename and return
@@ -130,14 +134,18 @@ def prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows,
         .rename(columns={"id_from": "from", "id_to": "to"})
     )
     df_cross = df_cross[df_cross["from"] < df_cross["to"]].reset_index(drop=True)
+    df_cross = df_cross[(df_cross["from"]!=df_cross["to"])]
 
     # Add flow info
     od_shapes = gpd.GeoDataFrame(pd.concat([od_point_in, od_point_out]), geometry="geometry")
-    od_flow = _AOI_flows(file_flows, od_shapes[["id","area", "type_av"]])
+    od_flow = _AOI_flows(file_flows, od_shapes[["id", "area", "type_av"]])
+    od_flow = od_flow[(od_flow["type_av_from"]=="inside")&(od_flow["type_av_to"]=="inside")].reset_index(drop=True)
+    od_flow = od_flow.drop(columns={"type_av_from", "type_av_to"})
+    od_flow = od_flow[(od_flow["from"]!=od_flow["to"])]
 
     df_cross["from"] = df_cross["from"].astype(int)
     df_cross["to"] = df_cross["to"].astype(int)
-    df_cross = df_cross.merge(od_flow, how='inner', on=['from', 'to'])
+    df_cross = df_cross.merge(od_flow, how='left', on=['from', 'to'])
     # df_cross = df_cross[df_cross['flow']>=1]
 
     return (
@@ -234,6 +242,7 @@ def _AOI_shapes(
 ):
     df = _OD_shapes(namefile_polygons=namefile)
     df_inside, df_outside = _AOI_OD_shapes(df, df_around)
+    return df_inside, df_outside
     df = gpd.GeoDataFrame(
         pd.concat([df_inside, df_outside], axis=0)[["id", "name", "geometry"]], 
         geometry="geometry", 
@@ -281,25 +290,31 @@ def _AOI_flows(
 
     # Assign shapes and flows
     df_od = df_od.merge(
-        od_shapes.rename(columns={"id":"from", "area":"area_from", "type_av":"type_av_from"}),
+        od_shapes[["id", "area", "type_av"]].rename(columns={"id":"from", "area":"area_from", "type_av":"type_av_from"}),
         how='left',
-        on="from"
+        on="from",
+        suffixes=["", "_from"]
     ).merge(
-        od_shapes.rename(columns={"id":"to", "area":"area_to", "type_av":"type_av_to"}),
+        od_shapes[["id", "area", "type_av"]].rename(columns={"id":"to", "area":"area_to", "type_av":"type_av_to"}),
         how='left',
-        on="to"
+        on="to",
+        suffixes=["", "_to"]
     )
     df_od["flow"] = df_od["flow"].fillna(0)
 
     # Distribute flows between inside and outside AV
-    df_od["flow2"] = (
+    df_od["flow"] = (
         df_od["flow"]
         * df_od["area_from"] / _sum_unique_area(df_od, "area_from", "from", "type_av_from")
         * df_od["area_to"] / _sum_unique_area(df_od, "area_to", "to", "type_av_to")
     ).fillna(0)
 
-    # print("Final total flow: ", sum(df_od["flow2"])) ## Debug only
-    return df_od[["from","to","flow"]]
+    # print("Final total flow: ", sum(df_od["flow"])) ## Debug only
+    df_od["from"] = df_od["from"].astype(int)
+    df_od["to"] = df_od["to"].astype(int)
+    df_od = df_od[["from","type_av_from","to","type_av_to","flow"]]
+
+    return df_od
 
 def _remove_nonpartitioning_zones(
         df_shapes: gpd.GeoDataFrame, 
