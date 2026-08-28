@@ -9,10 +9,8 @@ Usage: python osm_road_accessibility_convert.py input.osm.pbf output.osm.pbf
 import osmium
 from pathlib import Path
 from datetime import datetime
-import sys
-import os
-sys.path.append(f"{os.path.expanduser('.')}/src")
-from params import verbose
+
+from otp_mobility.utils.config import verbose
 
 
 class CarRestrictionHandler(osmium.SimpleHandler):

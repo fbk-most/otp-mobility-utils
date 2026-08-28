@@ -1,12 +1,9 @@
 #!/usr/bin/env python3
 import osmium
 from pathlib import Path
-import sys
-import os
-sys.path.append(f"{os.path.expanduser('.')}/src")
-from params import verbose
 from datetime import datetime
 
+from otp_mobility.utils.config import verbose
 
 class ParkingHandler(osmium.SimpleHandler):
     def __init__(self, writer):

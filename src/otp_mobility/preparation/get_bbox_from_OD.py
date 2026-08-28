@@ -3,12 +3,10 @@ from shapely.geometry import box
 from shapely.ops import transform
 from pyproj import Transformer, CRS
 from pathlib import Path
-import sys
-import os
-sys.path.append(f"{os.path.expanduser('.')}/src")
-from params import local_input, verbose
-from utils import get_dataframe
-from constants import N_CRS_PROJECTED, N_CRS_LATLONG
+
+from otp_mobility.utils.config import local_input, verbose
+from otp_mobility.utils.utils import get_dataframe
+from otp_mobility.utils.constants import N_CRS_PROJECTED, N_CRS_LATLONG
 
 
 def get_bbox(name_input: str, enlarged: bool = False):

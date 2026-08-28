@@ -8,13 +8,10 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 
-import sys
-import os
-sys.path.append(f"{os.path.expanduser('.')}/src")
-from utils import get_dataframe, put_dataframe, log_dataframe
-from constants import CRS_LATLONG, CRS_PROJECTED, P2V
-from params import local_raw, local_input, verbose
-from params import file_centroids, file_shape, file_av, file_flows
+from otp_mobility.utils.utils import put_dataframe, log_dataframe
+from otp_mobility.utils.constants import CRS_LATLONG, CRS_PROJECTED, P2V
+from otp_mobility.utils.config import local_raw, local_input, verbose
+from otp_mobility.utils.paths import file_centroids, file_shape, file_av, file_flows, data_output
 
 
 def read_and_prepare_centroids(file_centroids, file_shape, file_av, local):
@@ -325,7 +322,7 @@ def _remove_nonpartitioning_zones(
     df = df_shapes.copy().reset_index(drop=True)
     
     # Ensure to take the exterior border
-    total_union = df.geometry.unary_union
+    total_union = df.geometry.union_all()
     if hasattr(total_union, 'exterior'):
         total_boundary = total_union.exterior
     elif hasattr(total_union, 'geoms'):
@@ -334,7 +331,7 @@ def _remove_nonpartitioning_zones(
         total_boundary = shapely_union(exteriors) if exteriors else total_union.boundary
     else:
         total_boundary = total_union.boundary
-    
+
     # Find the zones to keep
     zones_to_keep = set()
     for i in range(len(df)):
@@ -428,7 +425,7 @@ if __name__ == '__main__':
     print("and saving.") if verbose else None
     file_output = "od-coords-extended"
     if local_input:
-        put_dataframe(df_extended, name=f"input_od/{file_output}", type="parquet")
+        put_dataframe(df_extended, name=data_output/file_output, type="parquet")
     else:
         log_dataframe(df_extended, name=file_output)
     
@@ -437,7 +434,7 @@ if __name__ == '__main__':
     print("and saving.") if verbose else None
     file_output = "od-coords-simplified"
     if local_input:
-        put_dataframe(df_simple, name=f"input_od/{file_output}", type="parquet")
+        put_dataframe(df_simple, name=data_output/file_output, type="parquet")
     else:
         log_dataframe(df_simple, name=file_output)
     
@@ -446,7 +443,7 @@ if __name__ == '__main__':
     print("and saving.") if verbose else None
     file_output = "od-coords-av"
     if local_input:
-        put_dataframe(df_av, name=f"input_od/{file_output}", type="parquet")
+        put_dataframe(df_av, name=data_output/file_output, type="parquet")
     else:
         log_dataframe(df_av, name=file_output)
     

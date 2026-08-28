@@ -9,12 +9,13 @@ import boto3
 
 import digitalhub as dh
 
-PROJECT = "test-otp-v2"
-PATH_TO_TESTDATA = Path(__file__).resolve().parent.parent / "data" 
+from otp_mobility.utils.config import PROJECT
+from otp_mobility.utils.paths import DATA_DIR as PATH_TO_TESTDATA
 
-def get_dataframe(name: str, local: bool = False) -> DataFrame:
+
+def get_dataframe(name: str|Path, local: bool = False) -> DataFrame:
     if local:
-        return pd.read_parquet((PATH_TO_TESTDATA / name).with_suffix(".parquet"))
+        return pd.read_parquet(name)
     return dh.get_dataitem(name, project=PROJECT).as_df()
 
 def put_dataframe(df: pd.DataFrame, name: str, type: str = "parquet") -> str:

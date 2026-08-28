@@ -16,13 +16,10 @@ import geopandas
 from shapely import wkt
 from pathlib import Path
 from datetime import datetime
-from shapely.geometry import Point
-
 import sys
-import os
-from back_way_forward_reference_writer import BackWayForwardReferenceWriter
-sys.path.append(f"{os.path.expanduser('.')}/src")
-from params import verbose
+
+from otp_mobility.preparation.back_way_forward_reference_writer import BackWayForwardReferenceWriter
+from otp_mobility.utils.config import verbose
 
 
 def _count_elements(input_file: str):
@@ -135,7 +132,15 @@ class ExtractInPolygon(osmium.SimpleHandler):
             self.writer.add_relation(r)
             self.n_relations += 1
         
-def extract_polygon_with_pyosmium(polygon_file, input_file: str, output_file: str):
+def extract_polygon_with_pyosmium(
+    input_file: str|Path, 
+    output_file: str|Path, 
+    polygon_file: str|Path|None = None, 
+    polygon_shape: geopandas.GeoDataFrame|None = None
+):
+    if (polygon_file is None) & (polygon_shape is None):
+        raise ValueError("No polygon provided. Provide either the shape (as a geodataframe in the input `polygon_shape`) or the filename to read (in the input `polygon_file`)")
+
     # Create the writer
     writer = BackWayForwardReferenceWriter(
         outfile=output_file, ref_src=input_file, 
@@ -144,7 +149,10 @@ def extract_polygon_with_pyosmium(polygon_file, input_file: str, output_file: st
     )
 
     # Read the polygon 
-    polygon = geopandas.read_file(polygon_file).geometry.iloc[0]
+    if polygon_file is not None:
+        polygon = geopandas.read_file(polygon_file).geometry.iloc[0]
+    else:
+        polygon = polygon_shape.copy().geometry.iloc[0]
 
     # Nodes and Ways
     print(f"-> Getting elements \n and it's {datetime.now().strftime('%H:%M:%S')}") if verbose else None

@@ -8,19 +8,17 @@ import sys
 from pathlib import Path
 import osmium
 
-from get_bbox_from_OD import get_bbox
-from extract_with_pyosmium import extract_bbox_with_pyosmium
-from tags_filter_with_pyosmium import our_tags_filter_with_pyosmium
-from add_parkrides import add_parkrides
-from resize_av import resize_av
-from extract_with_pyosmium import extract_polygon_with_pyosmium
-from extract_elements_outside import extract_elements_outside
-from add_car_restrictions import add_car_restrictions
+from otp_mobility.preparation.get_bbox_from_OD import get_bbox
+from otp_mobility.preparation.extract_with_pyosmium import extract_bbox_with_pyosmium
+from otp_mobility.preparation.tags_filter_with_pyosmium import our_tags_filter_with_pyosmium
+from otp_mobility.preparation.add_parkrides import add_parkrides
+from otp_mobility.preparation.resize_av import resize_av
+from otp_mobility.preparation.extract_with_pyosmium import extract_polygon_with_pyosmium
+from otp_mobility.preparation.extract_elements_outside import extract_elements_outside
+from otp_mobility.preparation.add_car_restrictions import add_car_restrictions
 
-base_dir = Path(".")
-data_input_service = base_dir / "data" / "input_service"
-data_input_od = base_dir / "data" / "input_od"
-preprocessing_dir = base_dir / "preprocessing"
+from otp_mobility.utils.paths import data_input_service, data_output, data_input_geo, data_output, file_osm
+
 
 
 def run_service_pipeline():
@@ -32,7 +30,7 @@ def run_service_pipeline():
     """Step 1: Extract bounding box from OD coordinates"""
     print(f"\n► Step 1: Extract bounding box from OD coordinates")
     bbox = get_bbox(
-        name_input=str("od-coords-simplified"),
+        name_input=data_output/"od-coords-simplified.parquet",
         enlarged=False
     )
     bbox = [10.734269464357556,43.96629819030445,12.139133497965453,44.91004596649926]
@@ -41,15 +39,15 @@ def run_service_pipeline():
     print(f"\n► Step 2: Extract entities in the bbox (i.e., Bologna area)")
     extract_bbox_with_pyosmium(
         bbox=bbox, 
-        input_file=str(data_input_service / "nord-est-latest.osm.pbf"), 
-        output_file=str(data_input_service / "bologna-area.osm.pbf")
+        input_file=file_osm, 
+        output_file=str(data_output / "bologna-area.osm.pbf")
     )
 
     """Step 3: Filter relevant entities (roads and features) for mobility analysis"""
     print(f"\n► Step 3: Filter relevant entities in the area")
     our_tags_filter_with_pyosmium(
-        input_file=str(data_input_service / "bologna-area.osm.pbf"), 
-        output_file=str(data_input_service / "bologna-area-filtered.osm.pbf"),
+        input_file=str(data_output / "bologna-area.osm.pbf"), 
+        output_file=str(data_output / "bologna-area-filtered.osm.pbf"),
         filter_file=str(data_input_service / "filter_expression.sh")
         
     )
@@ -60,8 +58,8 @@ def run_service_pipeline():
     """
     print(f"\n► Step 4: Correct parking features")
     add_parkrides(
-        input_file=str(data_input_service / "bologna-area-filtered.osm.pbf"),
-        output_file=str(data_input_service / "bologna-area-filtered-parking.osm.pbf")
+        input_file=str(data_output / "bologna-area-filtered.osm.pbf"),
+        output_file=str(data_output / "bologna-area-filtered-parking.osm.pbf")
     )
     
     print("\n" + "="*60)
@@ -74,31 +72,31 @@ def run_service_pipeline():
     '''
     print(f"\n► Step 5: Reduce the size of Area Verde")
     resize_av(
-        input_geojson=str(data_input_service / "area_verde_manual_v1.geojson"),
-        output_geojson=str(data_input_service / "small_area_verde_manual_v1.geojson")
+        input_geojson=str(data_input_geo / "area_verde_manual_v1.geojson"),
+        output_geojson=str(data_output / "small_area_verde_manual_v1.geojson")
     )
     
     """Step 6: Extract OSM elements inside the 'Area Verde' polygon"""
     print(f"\n► Step 6: Extract OSM elements inside Area Verde")
     extract_polygon_with_pyosmium(
-        polygon_file=str(data_input_service / "small_area_verde_manual_v1.geojson"),
-        input_file=str(data_input_service / "bologna-area-filtered-parking.osm.pbf"), 
-        output_file=str(data_input_service / "bologna-area-filtered-parking-inside-AV.osm.pbf")
+        polygon_file=str(data_output / "small_area_verde_manual_v1.geojson"),
+        input_file=str(data_output / "bologna-area-filtered-parking.osm.pbf"), 
+        output_file=str(data_output / "bologna-area-filtered-parking-inside-AV.osm.pbf")
     )
 
     """Step 7: Extract OSM elements outside the 'Area Verde' polygon"""
     print(f"\n► Step 7: Extract OSM elements outside Area Verde")
     extract_elements_outside(
-        input_file_container=str(data_input_service / "bologna-area-filtered-parking.osm.pbf"),
-        input_file_contained=str(data_input_service / "bologna-area-filtered-parking-inside-AV.osm.pbf"),
-        output_file=str(data_input_service / "bologna-area-filtered-parking-outside-AV.osm.pbf")
+        input_file_container=str(data_output / "bologna-area-filtered-parking.osm.pbf"),
+        input_file_contained=str(data_output / "bologna-area-filtered-parking-inside-AV.osm.pbf"),
+        output_file=str(data_output / "bologna-area-filtered-parking-outside-AV.osm.pbf")
     )
 
     """Step 8: Add car restrictions to entering in the 'Area Verde'"""
     print(f"\n► Step 8: Extract OSM elements outside Area Verde")
     add_car_restrictions(
-        input_file=data_input_service / "bologna-area-filtered-parking-inside-AV.osm.pbf",
-        output_file=data_input_service / "bologna-area-filtered-parking-inside-AV-footway.osm.pbf"
+        input_file=data_output / "bologna-area-filtered-parking-inside-AV.osm.pbf",
+        output_file=data_output / "bologna-area-filtered-parking-inside-AV-footway.osm.pbf"
     )
     
 
