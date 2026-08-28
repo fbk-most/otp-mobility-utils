@@ -9,6 +9,7 @@ Usage: python osm_road_accessibility_convert.py input.osm.pbf output.osm.pbf
 import osmium
 from pathlib import Path
 from datetime import datetime
+import sys
 
 from otp_mobility.utils.config import verbose
 

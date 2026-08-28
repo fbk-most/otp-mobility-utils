@@ -2,42 +2,12 @@ import pandas as pd
 import random
 import requests
 import json
-from datetime import datetime, timezone, date, time
+from datetime import date, time
 import time as time_module
-from typing import Dict, List, Optional
+from typing import Dict, Optional
 import sys
-import os
 
-### Params part 
-local_raw: bool = True
-local_input: bool = False
-local_processing: bool = True
-
-verbose: bool = True
-
-file_centroids: str = "data/input_od/Shape_zone_centroid.SHP"
-file_shape: str = "data/input_od/Shape_zone.SHP"
-file_av: str = "data/input_od/area_verde_manual_v1.geojson"
-file_flows: str = "data/input_od/PROGETTO-OD.xlsx"  
-
-modes: list[str] = ["CAR_PARK", "TRANSIT"]  ## Choose one or more among: "car_park", "car", "walk", "transit
-zoi: str = "restrictedAv"  ## Choose between "allBologna" and "restrictedAv"
-method: str = "extended" ## Choose between "simplified" and "extended" and "av"
-version: str = "20251205"
-
-modes_str =  "_".join(modes)
-
-input_coord_file: str = f"od-coords-{method}"
-if local_input:
-    input_coord_file = "input_od/" + input_coord_file
-
-output_times_file: str = f"otp_results_{method}_{zoi}_{modes_str}"
-if local_input:
-    output_times_file = "output/" + output_times_file + "_v" + version
-
-OTP_ENDPOINT = "http://localhost:8080/otp/routers/default/index/graphql"
-####
-
+from otp_mobility.utils.config import OTP_ENDPOINT
 
 
 QUERY_SIMPLE = """
@@ -437,15 +407,48 @@ class OTPBatchProcessor:
             # Debugging
             if result_row['status'] != 'success':
                 print(f"Error in line {idx} from ({origin_lat}, {origin_lon}) to ({dest_lat}, {dest_lon}): {result_row['status']}")
-            else:
-                print(f"OK in line {idx} from ({origin_lat}, {origin_lon}) to ({dest_lat}, {dest_lon}): {result_row['status']} - {result_row['duration_seconds']}")
-            
+
             results.append(result_row)
         
         # Crea il DataFrame dei risultati
         results_df = pd.DataFrame(results)
             
         return results_df
+
+def main_platform(
+    project, #Already read by the project setting
+    df, #Already obtained from the key parameter given
+    main_modes: list,
+    output_name: str,
+    otp_endpoint: str
+):
+    # Fix: eventually add WALK
+    if "WALK" not in main_modes:
+        main_modes = main_modes + ["WALK"]
+    
+    # Initialize the processor
+    processor = OTPBatchProcessor(otp_endpoint)
+    
+    # Process the dataset
+    results = processor.process_dataset(
+        df=df.as_df(),
+        main_mode=main_modes,
+        origin_lat_col='origin_lat',
+        origin_lon_col='origin_lon',
+        dest_lat_col='dest_lat',
+        dest_lon_col='dest_lon',
+        departure_date="2025-06-10",  # YYYY-MM-DD format
+        departure_time="07:00:00",  # HH:MM:SS format
+        delay_seconds=5.0,  # Pausa tra le richieste,
+        #dest_change=True,
+        origin_change=True
+    )
+
+    # Salva i risultati
+    try:
+        project.log_dataitem(name=output_name, kind="table", data=results)
+    except Exception as e:
+        print(f"Errore nel salvare il file: {e}")
 
 
 def test_single_query(main_modes: list):
@@ -496,106 +499,6 @@ def test_single_query(main_modes: list):
     print(route_info) # type: ignore
 
     print(f"Iteration before convergence: {n_iter}")
-    
-
-def main(
-    df,
-    main_modes: list,
-    output_name: str = output_times_file,
-    otp_endpoint: str = OTP_ENDPOINT
-):
-    """
-    Processes travel routes using the OpenTripPlanner batch processor based on the specified main modes.
-    Args:
-        main_modes (list): List of main travel modes to process. Valid values are "CAR", "CAR_PARK", "TRANSIT", and "WALK".
-    Workflow:
-        - Validates the provided main modes.
-        - Ensures "WALK" is included in the main modes.
-        - Configures OTP endpoint and input/output file paths.
-            - Here, properly set the dataset of ODs and the name of the output file.
-        - Initializes the OTPBatchProcessor.
-        - Processes the dataset for the specified travel modes and parameters.
-            - Inside this step the output of the simulator is found and saved.
-        - Prints statistics about the processed routes, including total, successful, and unsuccessful routes,
-          as well as duration statistics for successful routes.
-    """
-
-    # Fix: eventually add WALK
-    if "WALK" not in main_modes:
-        main_modes = main_modes + ["WALK"]
-
-    # Initialize the processor
-    processor = OTPBatchProcessor(OTP_ENDPOINT)
-    
-    # Process the dataset
-    results = processor.process_dataset(
-        df=df,
-        main_mode=main_modes,
-        origin_lat_col='origin_lat',
-        origin_lon_col='origin_lon',
-        dest_lat_col='dest_lat',
-        dest_lon_col='dest_lon',
-        departure_date="2025-06-10",  # YYYY-MM-DD format
-        departure_time="07:00:00",  # HH:MM:SS format
-        delay_seconds=1.0,  # Pausa tra le richieste,
-        dest_change=True,
-        origin_change=True
-    )
-
-    # Save the results
-    if local_output:
-        put_dataframe(df=results, name=output_times_file, type="parquet")
-    else:
-        log_dataframe(df=results, name=output_times_file)
-    
-    # Show statistics
-    print(f"\n--- STATISTICS ---")
-    print(f"Total routes processed: {len(results)}")
-    print(f"Routes found: {len(results[results['status'] == 'success'])}")
-    print(f"Routes not found: {len(results[results['status'] == 'no_route'])}")
-    
-    if len(results[results['status'] == 'success']) > 0:
-        successful_routes = results[results['status'] == 'success']
-        print(f"Avg. duration: {(successful_routes['duration_seconds'].mean())/60:.2f} minuti")
-        print(f"Min duration: {(successful_routes['duration_seconds'].min())/60:.2f} minuti")
-        print(f"Max duration: {(successful_routes['duration_seconds'].max())/60:.2f} minuti")
-        print(results.head(5))
-
-
-def main_platform(
-    project, #Already read by the project setting
-    df, #Already obtained from the key parameter given
-    main_modes: list,
-    output_name: str,
-    otp_endpoint: str
-):
-    # Fix: eventually add WALK
-    if "WALK" not in main_modes:
-        main_modes = main_modes + ["WALK"]
-    
-    # Initialize the processor
-    processor = OTPBatchProcessor(otp_endpoint)
-    
-    # Process the dataset
-    results = processor.process_dataset(
-        df=df.as_df(),
-        main_mode=main_modes,
-        origin_lat_col='origin_lat',
-        origin_lon_col='origin_lon',
-        dest_lat_col='dest_lat',
-        dest_lon_col='dest_lon',
-        departure_date="2025-06-10",  # YYYY-MM-DD format
-        departure_time="07:00:00",  # HH:MM:SS format
-        delay_seconds=5.0,  # Pausa tra le richieste,
-        #dest_change=True,
-        origin_change=True
-    )
-
-    # Salva i risultati
-    try:
-        project.log_dataitem(name=output_name, kind="table", data=results)
-    except Exception as e:
-        print(f"Errore nel salvare il file: {e}")
 
 
 if __name__ == "__main__":
@@ -611,7 +514,3 @@ if __name__ == "__main__":
     # Test a single query
     test_single_query(main_modes=sys.argv[1:])
     
-    # Process the whole dataset of OD pairs
-    df = get_dataframe(name=input_coord_file, local=local_input)
-    main(df=df, main_modes=sys.argv[1:], output_name=output_times_file, otp_endpoint=OTP_ENDPOINT)
-
