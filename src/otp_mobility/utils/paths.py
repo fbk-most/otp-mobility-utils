@@ -10,7 +10,7 @@ data_output = DATA_DIR / "output_preparation"
 
 file_centroids = data_input_od / "Shape_zone_centroid.SHP"
 file_shape = data_input_od / "Shape_zone.SHP"
-file_flow = data_input_od / "PROGETTO-OD.xlsx"  
+file_flows = data_input_od / "PROGETTO-OD.xlsx"  
 
 file_av = data_input_geo / "area_verde_manual_v1.geojson"
 
