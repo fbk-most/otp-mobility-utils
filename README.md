@@ -9,6 +9,23 @@ The project is organized in three main phases:
 - *OTP Simulations*: Compute travel times between zones. Mainly implemented through the code in `otp-processor.py`.
 - *Postprocessing*: Analyze simulation outputs. Most code is contained in the folder `postprocessing/`.
 
+## Python Environment
+
+The Python environment is managed with [uv](https://docs.astral.sh/uv/). Project metadata and dependencies are declared in `pyproject.toml`, while the exact resolved versions are tracked in `uv.lock`.
+
+From the project root, install uv and create the virtual environment and its dependencies with:
+
+```bash
+uv venv
+uv sync
+```
+
+Run Python scripts through the managed environment with `uv run`, for example:
+
+```bash
+uv run python runners/get_OD_points.py
+```
+
 ## 1. Preparation
 
 **Goal**: Load and/or generate the input files required for OTP simulations, specifically:
@@ -48,7 +65,7 @@ The **processing workflow** consists of several steps of area extraction, tag fi
 If **osmium-tool** is installed, the same pipeline can be executed more efficiently using the commands provided in `runners/get_OSM_data_with_osmiumtool.sh`.
 
 **Notes:**
-* `pyosmium` and `geopandas` are required to run the scripts. Install them through `pip install -r requirements.txt`.
+* `pyosmium` and `geopandas` are required to run the scripts. They are installed automatically by `uv sync` from the dependencies declared in `pyproject.toml`.
 * Place the main input file in the folder `data/input_service`. All output files will be saved in this directory.
 
 ### Service data
