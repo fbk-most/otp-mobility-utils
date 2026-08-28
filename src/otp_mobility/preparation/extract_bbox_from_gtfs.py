@@ -1,7 +1,7 @@
 import pandas as pd
 from zipfile import ZipFile
 
-from otp_mobility.utils.paths import folder_zip_gtfs
+from runners.paths import folder_zip_gtfs
 
 def get_bbox_gtfs():
     with ZipFile(folder_zip_gtfs) as gtfs_zip:

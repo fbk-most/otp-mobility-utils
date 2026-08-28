@@ -4,14 +4,14 @@ from shapely.ops import transform
 from pyproj import Transformer, CRS
 from pathlib import Path
 
-from otp_mobility.utils.config import local_input, verbose
+from otp_mobility.utils.config import verbose
 from otp_mobility.utils.utils import get_dataframe
 from otp_mobility.utils.constants import N_CRS_PROJECTED, N_CRS_LATLONG
 
 
 def get_bbox(name_input: str, enlarged: bool = False):
     # Read the file of coordinates
-    coord = get_dataframe(name=name_input, local=local_input)
+    coord = get_dataframe(name=name_input, local=True)
 
     # Get bbox
     min_lat = min(coord['origin_lat'].min(), coord['dest_lat'].min())

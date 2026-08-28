@@ -3,11 +3,7 @@
 Complete preprocessing pipeline for OSM data.
 Executes all steps described in the README in sequence.
 """
-import subprocess
 import sys
-from pathlib import Path
-import osmium
-import pandas as pd
 
 from otp_mobility.preparation.get_bbox_from_OD import get_bbox
 from otp_mobility.preparation.extract_with_pyosmium import extract_bbox_with_pyosmium
@@ -18,13 +14,11 @@ from otp_mobility.preparation.extract_with_pyosmium import extract_polygon_with_
 from otp_mobility.preparation.extract_elements_outside import extract_elements_outside
 from otp_mobility.preparation.add_car_restrictions import add_car_restrictions
 
-from otp_mobility.utils.paths import (
+from paths import (
     data_input_service, data_output, data_input_geo, 
     data_output_tmp, data_output,
     file_osm
 )
-
-
 
 def run_service_pipeline():
     """Execute the complete service data pipeline"""

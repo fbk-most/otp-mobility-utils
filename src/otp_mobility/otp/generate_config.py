@@ -1,7 +1,6 @@
 import json
 from pathlib import Path
 
-from otp_mobility.utils.paths import folder_zip_gtfs, data_output
 
 def _to_uri(path: str | Path) -> str:
     return Path(path).absolute().as_uri()  # return file:///path/assoluto

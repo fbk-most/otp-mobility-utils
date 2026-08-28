@@ -1,13 +1,25 @@
-import pandas as pd
-import random
-import requests
 import json
-from datetime import date, time
-import time as time_module
-from typing import Dict, Optional
+import logging
+import random
 import sys
+import time as time_module
+from datetime import date, time
+from typing import Dict, Optional
+
+import pandas as pd
+import requests
 
 from otp_mobility.utils.config import OTP_ENDPOINT
+
+try:
+    from runners.config import logging_level
+except ImportError:
+    logging_level = logging.INFO
+
+if not logging.getLogger().handlers:
+    logging.basicConfig(level=logging_level)
+
+logger = logging.getLogger(__name__)
 
 
 QUERY_SIMPLE = """
@@ -164,17 +176,16 @@ class OTPBatchProcessor:
             result = response.json()
 
             if "errors" in result:
-                print(f"GraphQL errors: {result['errors']}")
+                logger.warning("GraphQL errors: %s", result["errors"])
                 return None
-                
+
             return result
 
         except requests.RequestException as e:
             raise RuntimeError(f"Errore nella richiesta HTTP: {e}")
 
         except json.JSONDecodeError as e:
-            print(f"Errore JSON decode: {e}")
-            print(f"Response text: {response.text[:500]}...") # type: ignore
+            logger.error("JSON decode error: %s. Response text: %s", e, response.text[:500])
             return None
 
     
@@ -404,9 +415,16 @@ class OTPBatchProcessor:
                 **route_info # type: ignore
             }
 
-            # Debugging
             if result_row['status'] != 'success':
-                print(f"Error in line {idx} from ({origin_lat}, {origin_lon}) to ({dest_lat}, {dest_lon}): {result_row['status']}")
+                logger.warning(
+                    "Error in line %s from (%s, %s) to (%s, %s): %s",
+                    idx,
+                    origin_lat,
+                    origin_lon,
+                    dest_lat,
+                    dest_lon,
+                    result_row['status'],
+                )
 
             results.append(result_row)
         
@@ -448,8 +466,7 @@ def main_platform(
     try:
         project.log_dataitem(name=output_name, kind="table", data=results)
     except Exception as e:
-        print(f"Errore nel salvare il file: {e}")
-
+        logger.exception("Error while saving the file: %s", e)
 
 def test_single_query(main_modes: list):
     """
@@ -477,10 +494,10 @@ def test_single_query(main_modes: list):
             dest_lon=dest_lon_tmp,
             departure_date="2025-06-10",
             departure_time="07:00:00",
-            main_mode=main_modes
+            main_mode=main_modes,
         )
-        print(result)
-        route_info = processor.extract_route_info(result) # type: ignore
+        logger.debug("Query result: %s", result)
+        route_info = processor.extract_route_info(result)  # type: ignore
 
         if route_info['status'] == 'success':
             result_found = True
@@ -492,25 +509,67 @@ def test_single_query(main_modes: list):
             dest_lat_tmp = dest_lat_tmp + 5*0.0000899 if lat_plus else dest_lat_tmp - 5*0.0000899  # Move 10 metri in latitude
         n_iter += 1
         
-    print("Raw result:")
-    print(json.dumps(result, indent=2)) # type: ignore
+    logger.info("Raw result: %s", json.dumps(result, indent=2))
+    logger.info("Extracted info: %s", route_info)
+    logger.info("Iteration before convergence: %s", n_iter)
+
+def simulate_otp(
+    df,
+    main_modes: list,
+    otp_endpoint,
+):
+    """
+    Processes travel routes using the OpenTripPlanner batch processor based on the specified main modes.
+    Args:
+        main_modes (list): List of main travel modes to process. Valid values are "CAR", "CAR_PARK", "TRANSIT", and "WALK".
+    Workflow:
+        - Validates the provided main modes.
+        - Ensures "WALK" is included in the main modes.
+        - Configures OTP endpoint and input/output file paths.
+            - Here, properly set the dataset of ODs and the name of the output file.
+        - Initializes the OTPBatchProcessor.
+        - Processes the dataset for the specified travel modes and parameters.
+            - Inside this step the output of the simulator is found and saved.
+        - Prints statistics about the processed routes, including total, successful, and unsuccessful routes,
+          as well as duration statistics for successful routes.
+    """
+
+    # Fix: eventually add WALK
+    if "WALK" not in main_modes:
+        main_modes = main_modes + ["WALK"]
+
+    # Initialize the processor
+    processor = OTPBatchProcessor(otp_endpoint)
     
-    print("\nExtracted info:")
-    print(route_info) # type: ignore
+    # Process the dataset
+    results = processor.process_dataset(
+        df=df,
+        main_mode=main_modes,
+        origin_lat_col='origin_lat',
+        origin_lon_col='origin_lon',
+        dest_lat_col='dest_lat',
+        dest_lon_col='dest_lon',
+        departure_date="2025-06-10",  # YYYY-MM-DD format
+        departure_time="07:00:00",  # HH:MM:SS format
+        delay_seconds=1.0,  # Pausa tra le richieste,
+        dest_change=True,
+        origin_change=True
+    )
+ 
+    logger.info("--- STATISTICS ---")
+    logger.info("Total routes processed: %s", len(results))
+    logger.info("Routes found: %s", len(results[results['status'] == 'success']))
+    logger.info("Routes not found: %s", len(results[results['status'] == 'no_route']))
 
-    print(f"Iteration before convergence: {n_iter}")
+    if len(results[results['status'] == 'success']) > 0:
+        successful_routes = results[results['status'] == 'success']
+        logger.info("Avg. duration: %.2f minutes", (successful_routes['duration_seconds'].mean()) / 60)
+        logger.info("Min duration: %.2f minutes", (successful_routes['duration_seconds'].min()) / 60)
+        logger.info("Max duration: %.2f minutes", (successful_routes['duration_seconds'].max()) / 60)
+        logger.info("Sample results: %s", results.head(5).to_dict(orient='records'))
 
+    return results
 
 if __name__ == "__main__":
-    # Check IO
-    if len(sys.argv) < 2:
-        raise ValueError("Error: at least 1 argument needed")
-    for main_mode in sys.argv[1:]:
-        if main_mode not in ["CAR", "CAR_PARK", "TRANSIT", "WALK"]:
-            raise ValueError("Error: One of the main_modes is not in ['CAR', 'CAR_PARK', 'TRANSIT', 'WALK]")
-    if ("CAR" in sys.argv[1:]) and ("CAR_PARK" in sys.argv[1:]):
-        raise ValueError("Error: Specify either 'CAR' or 'CAR_PARK', not both.")
-
-    # Test a single query
-    test_single_query(main_modes=sys.argv[1:])
+    test_single_query(main_modes=["CAR_PARK", "TRANSIT", "WALK"])
     

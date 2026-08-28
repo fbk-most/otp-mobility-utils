@@ -8,17 +8,13 @@ import pandas as pd
 import geopandas as gpd
 from shapely.geometry import Point
 
-from otp_mobility.utils.utils import put_dataframe, log_dataframe
 from otp_mobility.utils.constants import CRS_LATLONG, CRS_PROJECTED, P2V
-from otp_mobility.utils.config import local_raw, local_input, verbose
-from otp_mobility.utils.paths import file_centroids, file_shape, file_av, file_flows, data_output
+from paths import file_centroids, file_shape, file_av, file_flows, data_output
 
+from config import logging, logging_level
 
-def read_and_prepare_centroids(file_centroids, file_shape, file_av, local):
+def read_and_prepare_centroids(file_centroids, file_shape, file_av,):
     # Assign av to OD shapes
-    if not local:
-        NotImplementedError("Non-local input is not implemented")
-    
     av = _AV_shape(file_av)
 
     od_shape_inside, od_shape_outside = _AOI_shapes(file_shape, av)
@@ -48,7 +44,7 @@ def read_and_prepare_centroids(file_centroids, file_shape, file_av, local):
     
     return ret_inside, ret_outside
 
-def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows, local):
+def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows):
     '''
     Given the zones from the PUMS and the boundary of Area Verde, first it
     distinguishes between the zones inside and outside the area.
@@ -56,7 +52,7 @@ def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows, 
     TODO: do also the opposite, with AV as origin.
     '''
 
-    od_point_in, od_point_out = read_and_prepare_centroids(file_centroids, file_shape, file_av, local)
+    od_point_in, od_point_out = read_and_prepare_centroids(file_centroids, file_shape, file_av)
 
     # Cross join
     od_point_in["_key"] = 1
@@ -91,7 +87,7 @@ def prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows, 
     )
     return df_cross
                              
-def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows, local):
+def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows):
     '''
     Given the zones from the PUMS and the boundary of Area Verde, first it
     distinguishes between the zones inside and outside the area.
@@ -101,8 +97,8 @@ def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows
     TODO: do also the opposite, with AV as origin.
     '''
 
-    df = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows, local)
-    od_points_in, _ = read_and_prepare_centroids(file_centroids, file_shape, file_av, local)
+    df = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows)
+    od_points_in, _ = read_and_prepare_centroids(file_centroids, file_shape, file_av)
     point_av_lon, point_av_lat = find_av_centroid(od_points_in, df)
    
     # Dest point 
@@ -113,7 +109,7 @@ def prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows
 
     return df[['origin_lat', 'origin_lon', 'from', 'dest_lat', 'dest_lon', 'to', 'flow']]
 
-def prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows, local):
+def prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows):
     '''
     Given the zones from the PUMS and the boundary of Area Verde, first it
     distinguishes between the zones inside and outside the area. 
@@ -121,7 +117,7 @@ def prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows,
     Then, a new file is created with all combinations of inside zones as origin and destination
     '''
 
-    od_point_in, od_point_out = read_and_prepare_centroids(file_centroids, file_shape, file_av, local)
+    od_point_in, od_point_out = read_and_prepare_centroids(file_centroids, file_shape, file_av)
 
     # Cross join
     od_point_in["_key"] = 1
@@ -420,30 +416,19 @@ def _sum_unique_area(df, area_col, id_col, type_col):
     )
 
 if __name__ == '__main__':
-    print("Computing points from outside - extended") if verbose else None
-    df_extended = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows, local_raw)
-    print("and saving.") if verbose else None
-    file_output = "od-coords-extended"
-    if local_input:
-        put_dataframe(df_extended, name=data_output/file_output, type="parquet")
-    else:
-        log_dataframe(df_extended, name=file_output)
+    logging.basicConfig(level=logging_level)
+
+    logging.info("Computing points from outside - extended")
+    df_extended = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows)
+    logging.info("and saving.")
+    df_extended.to_parquet(data_output / "od-coords-extended.parquet")
     
-    print("Computing points from outside - simplified") if verbose else None
-    df_simple = prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows, local_raw)
-    print("and saving.") if verbose else None
-    file_output = "od-coords-simplified"
-    if local_input:
-        put_dataframe(df_simple, name=data_output/file_output, type="parquet")
-    else:
-        log_dataframe(df_simple, name=file_output)
+    logging.info("Computing points from outside - simplified")
+    df_simple = prepare_otp_input_simplified(file_centroids, file_shape, file_av, file_flows)
+    logging.info("and saving.")
+    df_simple.to_parquet(data_output / "od-coords-simplified.parquet")
     
-    print("Computing points inside") if verbose else None
-    df_av = prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows, local_raw)
-    print("and saving.") if verbose else None
-    file_output = "od-coords-av"
-    if local_input:
-        put_dataframe(df_av, name=data_output/file_output, type="parquet")
-    else:
-        log_dataframe(df_av, name=file_output)
-    
+    logging.info("Computing points inside")
+    df_av = prepare_otp_input_inside_av(file_centroids, file_shape, file_av, file_flows)
+    logging.info("and saving.")
+    df_av.to_parquet(data_output / "od-coords-av.parquet")
