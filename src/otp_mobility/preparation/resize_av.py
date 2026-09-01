@@ -1,8 +1,6 @@
 import geopandas as gpd
 import sys
-import os
-sys.path.append(f"{os.path.expanduser('.')}/src")
-from constants import CRS_LATLONG, CRS_PROJECTED
+from otp_mobility.utils.constants import CRS_LATLONG, CRS_PROJECTED
 
 def resize_av(input_geojson: str, output_geojson: str):
     av = gpd.read_file(input_geojson).to_crs(CRS_PROJECTED)

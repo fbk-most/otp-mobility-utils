@@ -14,12 +14,10 @@ Note: this filter implementation is tested to work with our filters written in f
 import osmium
 from pathlib import Path
 import sys
-import os
-sys.path.append(f"{os.path.expanduser('.')}/src")
-from params import verbose
+from otp_mobility.utils.config import verbose
 from datetime import datetime
-from back_way_forward_reference_writer import BackWayForwardReferenceWriter
-from parse_filter_expression import parse_filter_expression
+from otp_mobility.preparation.back_way_forward_reference_writer import BackWayForwardReferenceWriter
+from otp_mobility.preparation.parse_filter_expression import parse_filter_expression
 
 
 def our_tags_filter_with_pyosmium(input_file, output_file, filter_file):

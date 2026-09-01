@@ -1,2 +1,0 @@
-geopandas==1.1.0
-osmium==4.0.2

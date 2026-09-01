@@ -1,110 +1,229 @@
-# OpenTripPlanner — Bologna Case Study
+# otp-gdb-mobility
 
-This repository provides a structured setup for extracting travel times with **OpenTripPlanner (OTP)**, with the final goal of comparing travel times between zones using different transport modes.
+This project prepares OD and OSM data for a Bologna mobility study and runs OpenTripPlanner (OTP) simulations to compare travel times across different transport modes and spatial contexts.
 
-## Workflow Overview
-The project is organized in three main phases:
+The workflow is structured around three main blocks:
 
-- *Preprocessing*: Create input files for OTP simulations. Most code is contained in the folder `preprocessing/`.
-- *OTP Simulations*: Compute travel times between zones. Mainly implemented through the code in `otp-processor.py`.
-- *Postprocessing*: Analyze simulation outputs. Most code is contained in the folder `postprocessing/`.
+- OD preparation from the municipal zoning system and the AV boundary
+- OSM preprocessing for Bologna, including filtering, parking handling and access restrictions
+- OTP routing simulations for local and remote environments, with batch GraphQL queries and postprocessing notebooks
 
-## 1. Preprocessing
+## Repository structure
 
-**Goal**: Load and/or generate the input files required for OTP simulations, specifically:
-- *OD coords points*: Parquet files describing all the combinations of origin and destination zones.
-- *OSM data*: OpenStreetMap network files, relaborated from source to focus on the Bologna area and the task of interest.
-- *Service data*: .zip files, downloaded from source, listing the routes and schedules of the public transports in the area.
-
-### OD coords point
-The implementation of this pipeline is in the script `preprocessing/geo_OD_points.py`. It extracts the centroids of the zones in the Province of Bologna, recording latitude, longitude, and zone ID, and generates all origin–destination (OD) combinations, which are then written to the output files.
-
-The analysis requires the following **input files**. All input files must be placed in the `data/input_od` folder.
-- the geographical boundaries of the Area Verde in the file `area_verde_manual_v1.geojson`.
-- the centroids and shapes of the PUMS areas in the files `Shape_zone_centroid.SHP` and `Shape_zone.SHP` respectively.
-- the flows from all combinations of origin and destination zones, saved in the file `PROGETTO-OD.xlsx`.
-
-The processing pipeline **outputs three files** used in the next OTP simulation:
-- `od-coords-extended`: contains the coordinates of OD pairs where the origin lies outside the Area Verde and the destination lies inside it.
-- `od-coords-simplified`: aggregates all zones within the Area Verde into a single polygon, providing coordinates for origins outside the area and a single centroid representing the destination.
-- `od-coords-av`, contains the coordinates of OD pairs with both origin and destination inside the Area Verde
-
-The implementation supports both **local and remote writing** of the data:
-- For saving locally, files are read from and written to the directory `data/input_od`.
-- For saving on the datalake, use the project `test-otp-v2` and the functionalities of `digitalhub` to store data on the prokect data lake.
-
-### OSM data
-OpenStreetMap (OSM) data are processed using Osmium to rework an input OSM file for the region.
-
-The **input file** is `nord-est-latest.osm.pbf`, which can be downloaded from [Geofabrik](https://download.geofabrik.de/europe/italy/nord-est.html).
-*Note: the version used in this analysis was downloaded on 2025-05-27.*
-
-The processing pipeline **outputs three files** used in the next OTP simulation:
-- `bologna-area-filtered-parking.osm.pbf`: all OSM elements of interest in the Bologna province.
-- `bologna-area-filtered-parking-inside-AV-footway.osm.pbf`: all OSM elements of interest in the Area Verde, with modified tags to limit vehicular access.
-- `bologna-area-filtered-parking-outside-AV.osm.pbf`all OSM elements of interest outside the Area Verde.
-
-The **processing workflow** consists of several steps of area extraction, tag filtering, and tag modification. All of these are implemented in the script `preprocessing/get_OSM_data_with_pyosmium.py`.
-If **osmium-tool** is installed, the same pipeline can be executed more efficiently using the commands provided in `preprocessing/get_OSM_data_with_osmiumtool.sh`.
-
-**Notes:**
-* `pyosmium` and `geopandas` are required to run the scripts. Install them through `pip install -r requirements.txt`.
-* Place the main input file in the folder `data/input_service`. All output files will be saved in this directory.
-
-### Service data
-These are the GTFS service data, which describe public transport routes and schedules.
-
-For this analysis, only the TPER bus data were used. They are provided in the zip folder `gommagtfsbo_20250513.zip`, which can be downloaded from [Solweb TPER](https://solweb.tper.it/web/tools/open-data/open-data.aspx). *Note: the version used in this analysis was downloaded on 2025-05-27.*
-
-## 2. OTP Simulations
-
-**Goal**: Query OTP to compute travel times between zones using different transport modes.
-
-You can run simulations either *locally*, with a direct execution with OTP server, or *on cluster*, with a distributed execution on HPC cluster. Different steps are required to execute OTP in the two ways.
-
-### Option A: Local execution
-
-The first step is to insall OTP:
-1. Ensure that Java is installed (it is required to run OTP)
-2. Download **OTP** (`otp-shaded-2.7.0.jar`) from [Maven Central](https://repo1.maven.org/maven2/org/opentripplanner/otp-shaded/2.7.0/)
-3. Place the file in the **main folder of this repository**
-
-In the same folder, locate the `.zip` file(s) of the GTSF data describing the service, and the `.pbf` file(s) of the road network and facilities. 
-
-From the project folder, launch OTP with:
-```bash
-java -Xmx2G -jar otp-shaded-2.7.0.jar --build --serve .
+```text
+.
+├── README.md
+├── main.py
+├── pyproject.toml
+├── uv.lock
+├── data/
+│   ├── input_geo/
+│   │   └── area_verde_manual_v1.geojson
+│   ├── input_od/
+│   │   ├── Shape_zone.SHP
+│   │   ├── Shape_zone_centroid.SHP
+│   │   └── PROGETTO-OD.xlsx
+│   ├── input_service/
+│   │   ├── config_filter_rules.sh
+│   │   ├── nord-est-260826.osm.pbf
+│   │   └── gommagtfsbo_20250513.zip
+│   └── output/
+│       ├── tmp/
+│       ├── build-config.json
+│       ├── routing-config.json
+│       ├── od-coords-extended.parquet
+│       ├── od-coords-simplified.parquet
+│       ├── od-coords-av.parquet
+│       ├── bologna-area-filtered-parking.osm.pbf
+│       ├── bologna-area-filtered-parking-inside-AV.osm.pbf
+│       ├── bologna-area-filtered-parking-inside-AV-footway.osm.pbf
+│       └── bologna-area-filtered-parking-outside-AV.osm.pbf
+├── runners/
+│   ├── config.py
+│   ├── get_OD_points.py
+│   ├── get_OSM_data_with_osmiumtool.sh
+│   ├── get_OSM_data_with_pyosmium.py
+│   ├── paths.py
+│   ├── run_otp_simulation_locally.py
+│   └── run_otp_simulation_remotely.ipynb
+├── src/
+│   └── otp_mobility/
+│       ├── __init__.py
+│       ├── otp/
+│       │   ├── generate_config.py
+│       │   └── processor.py
+│       ├── preparation/
+│       │   ├── add_car_restrictions.py
+│       │   ├── add_parkrides.py
+│       │   ├── extract_bbox_from_gtfs.py
+│       │   ├── extract_elements_outside.py
+│       │   ├── extract_with_pyosmium.py
+│       │   ├── get_bbox_from_OD.py
+│       │   ├── parse_filter_expression.py
+│       │   ├── resize_av.py
+│       │   ├── tags_filter_with_pyosmium.py
+│       │   └── verify_file_sizes.py
+│       └── utils/
+│           ├── config.py
+│           ├── constants.py
+│           ├── paths.py
+│           └── utils.py
+└── notebooks/
+    └── postprocessing/
+        ├── check_extended_results.ipynb
+        └── check_simplified_results.ipynb
 ```
-This instruction will build the transportation graph from the input data and activate the simulator.
 
-To excute the queries, **run the main script** `otp-processor.py`:
+## Python environment
+
+This project targets Python 3.12+ and uses uv for dependency management.
+
 ```bash
-python otp_processor.py XXX
+uv venv
+uv sync
 ```
-where `XXX` represent a sequence of one or more modes of transport values from:
-- `"CAR"`: travel by car  
-- `"TRANSIT"`: travel by public transport  
-- `"WALK"`: travel by walking (always added as an available mode)
-The script is able to read both local and remote data. Set the location of the data in the `src/params.py` list.
 
-**Note**: OTP must be running while queries are executed.
+Scripts are run from the repository root with the managed environment so the package under `src/otp_mobility` is correctly imported.
 
-### Option B: Cluster Execution
+```bash
+uv run python runners/get_OD_points.py
+```
 
-First, we need to create and actiate the OTP container on the server. This is done in the first part of the notebook `otp-to-platform.ipynb`.
-Then, the same notebook is used to launch the simulation job.
+## Required input data
 
-**Remember:** The notebook have most parameters fixed, other changing over simulation. Always check, and possibly change:
-- The link to access the artifacts of the `.zip` and `.pbf` data on s3
-- The url of the container where OTP is running
-- The s3 location of the input OD point data
-- The input parameters of the simulation (e.g., modes of transport, OD points)
+Before executing the pipeline, make sure the following files are available:
 
-**Note**: On cluster, only remote data access is available
+- `data/input_geo/area_verde_manual_v1.geojson`: AV polygon used for the mobility accessibility analysis
+- `data/input_od/Shape_zone.SHP`: zone polygons
+- `data/input_od/Shape_zone_centroid.SHP`: zone centroids
+- `data/input_od/PROGETTO-OD.xlsx`: OD flows between zones
+- `data/input_service/nord-est-260826.osm.pbf`: regional OSM extract for the Bologna area (Geofabrik)
+- `data/input_service/gommagtfsbo_20250513.zip`: GTFS feed for the local public transport network
 
-## 3. Postprocessing
+## Configuration and project paths
 
-**Goal**: Analyze simulation outputs to extract insights and compare travel times.
+The project centralizes paths and defaults in:
 
-If output data are saved locally, they can be found in: `data/output/`. 
+- `runners/paths.py`
+- `runners/config.py`
+- `src/otp_mobility/utils/config.py`
+- `src/otp_mobility/utils/constants.py`
+
+This keeps the data workflow reproducible and makes it easier to swap input/output folders or simulation parameters.
+
+## Main workflow
+
+### 1. Prepare OD data
+
+The script `runners/get_OD_points.py` builds the OD datasets used by OTP from the zone polygons, centroids and the OD matrix.
+
+It creates three dataset variants:
+
+- `data/output/od-coords-extended.parquet`: all OD pairs from outside to inside AV
+- `data/output/od-coords-simplified.parquet`: outside origins aggregated toward a single flow-weighted AV destination
+- `data/output/od-coords-av.parquet`: OD pairs entirely within AV
+
+The logic is implemented in the preparation utilities under `src/otp_mobility/preparation/` and is built around zone classification inside/outside the AV, centroid operations and flow aggregation.
+
+Run it with:
+
+```bash
+uv run python runners/get_OD_points.py
+```
+
+### 2. Prepare OSM service data
+
+The OSM preparation pipeline is implemented in `runners/get_OSM_data_with_pyosmium.py` and executes a sequence of processing steps:
+
+1. Extract the Bologna bounding box from the OD coordinates
+2. Extract the relevant OSM objects from the regional dataset
+3. Filter the tags needed for mobility analysis
+4. Enhance parking data by tagging park-and-ride facilities and removing duplicates
+5. Resize the AV polygon to model restricted access conditions
+6. Extract OSM features inside AV and outside AV
+7. Add car restriction rules to the inside-AV network layer
+
+The generated outputs are stored in `data/output/` and `data/output/tmp/`.
+
+Key generated files include:
+
+- `bologna-area-filtered-parking.osm.pbf`
+- `bologna-area-filtered-parking-inside-AV.osm.pbf`
+- `bologna-area-filtered-parking-inside-AV-footway.osm.pbf`
+- `bologna-area-filtered-parking-outside-AV.osm.pbf`
+
+Run the pipeline with:
+
+```bash
+uv run python runners/get_OSM_data_with_pyosmium.py
+```
+
+An alternative Osmium CLI workflow is also available in `runners/get_OSM_data_with_osmiumtool.sh`.
+
+### 3. Generate OTP configuration
+
+The OTP configuration is produced by `src/otp_mobility/otp/generate_config.py`.
+
+It creates:
+
+- a static configuration with OSM and GTFS sources
+- a routing configuration for OTP defaults such as search window and walking reluctance
+
+The generated configuration files are written under `data/output/` as `build-config.json` and `routing-config.json`.
+
+### 4. Run OTP simulations
+
+The routing logic is implemented in `src/otp_mobility/otp/processor.py` and performs batch GraphQL queries against the OTP endpoint.
+
+Supported transport modes include combinations such as:
+
+- `CAR_PARK`
+- `TRANSIT`
+- `WALK`
+- mixed multimodal combinations
+
+The project also includes logic to retry queries with small coordinate jitter when a route is not found, helping recover from edge cases in the network representation.
+
+#### Local execution
+
+1. Install Java
+2. Download the OTP jar, for example `otp-shaded-2.7.0.jar`, and place it in a convenient local path. Set the path in `runners/path.py` under the variable `otp_jar_file`.
+3. Then run the local simulation script:
+
+```bash
+uv run python runners/run_otp_simulation_locally.py
+```
+
+Simulation parameters and mode sets are defined in `runners/config.py`.
+
+#### Remote execution
+
+Remote execution is supported via the notebook `runners/run_otp_simulation_remotely.ipynb`.
+
+This workflow targets a DigitalHub/OTP platform environment and is useful when the routing engine is executed remotely instead of locally. Before running it, verify the OTP endpoint, GTFS and OSM locations, and the selected OD dataset.
+
+### 5. Postprocessing
+
+The notebooks in `notebooks/postprocessing/` are used to inspect and validate the simulation output:
+
+- `check_extended_results.ipynb`
+- `check_simplified_results.ipynb`
+
+These notebooks are intended to compare travel-time characteristics across the extended and simplified OD scenarios before further analysis.
+
+## Typical execution sequence
+
+```bash
+uv sync
+uv run python runners/get_OD_points.py
+uv run python runners/get_OSM_data_with_pyosmium.py
+uv run python runners/run_otp_simulation_locally.py
+```
+
+## Notes
+
+- The project mixes local preprocessing and remote OTP execution.
+- `WALK` is automatically added to route requests when needed by the simulation layer.
+- Results are typically stored in `data/output/` as Parquet tables and OSM extracts.
+- The project is built around Bologna-specific constraints such as AV access rules, park-and-ride integration and multi-modal travel-time analysis.
 

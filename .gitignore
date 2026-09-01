@@ -184,3 +184,4 @@ cython_debug/
 *.jar
 
 # Hidden folders
+data/

@@ -1,12 +1,9 @@
 import osmium
-import shapely.geometry as geom
 from datetime import datetime
-import json
 import sys
-import os
 from pathlib import Path
-sys.path.append(f"{os.path.expanduser('.')}/src")
-from params import verbose
+
+from otp_mobility.utils.config import verbose
 
 
 def extract_elements_outside(input_file_container: str, input_file_contained: str, output_file:str):
