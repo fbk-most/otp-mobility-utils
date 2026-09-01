@@ -47,7 +47,7 @@ def run_service_pipeline():
     our_tags_filter_with_pyosmium(
         input_file=str(data_output_tmp / "bologna-area.osm.pbf"), 
         output_file=str(data_output_tmp / "bologna-area-filtered.osm.pbf"),
-        filter_file=str(data_input_service / "filter_expression.sh")
+        filter_file=str(data_input_service / "config_filter_rules.sh")
         
     )
 
