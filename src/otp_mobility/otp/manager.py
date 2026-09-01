@@ -30,8 +30,8 @@ def start_otp(
 
     process = subprocess.Popen(
         command,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
         text=True,
     )
 
@@ -47,9 +47,22 @@ def wait_for_otp(process, timeout=600):
     start_time = time.time()
 
     logger.info("Waiting for OTP to become ready...")
-
     while time.time() - start_time < timeout:
         if process.poll() is not None:
+            log_text = ""
+            if process.stdout is not None:
+                try:
+                    log_text = process.stdout.read()
+                except Exception:
+                    log_text = ""
+
+            if log_text.strip():
+                logger.error("OTP exited early. Captured logs:\n%s", log_text)
+                raise RuntimeError(
+                    f"OTP stopped with exit code {process.returncode}.\n"
+                    f"Captured logs:\n{log_text}"
+                )
+
             raise RuntimeError(
                 f"OTP stopped with exit code {process.returncode}"
             )
