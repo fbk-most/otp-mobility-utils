@@ -322,6 +322,7 @@ class OTPBatchProcessor:
         departure_date: str = "2025-06-10",
         departure_time: str = "07:00:00",
         delay_seconds: float = 5.0,
+        progress_step_percent: float = 5.0,
         origin_change: bool = False,
         dest_change: bool = False
     ) -> pd.DataFrame:
@@ -336,11 +337,15 @@ class OTPBatchProcessor:
         missing_cols = [col for col in required_cols if col not in df.columns]
         if missing_cols:
             raise RuntimeError(f"Missing columns in the input file PARQUET: {missing_cols}")
+        if progress_step_percent <= 0 or progress_step_percent > 100:
+            raise ValueError("progress_step_percent must be greater than 0 and at most 100")
         
         # List of the results
         results = []
         
         # Process each line (i.e., each OD pair)
+        total_rows = len(df)
+        next_progress = progress_step_percent
         for idx, row in df.iterrows():
             result_found = False
 
@@ -419,6 +424,17 @@ class OTPBatchProcessor:
                 )
 
             results.append(result_row)
+            progress = ((idx + 1) / total_rows * 100) if total_rows else 100
+            if progress >= next_progress or idx + 1 == total_rows:
+                logger.info(
+                    "Processing OD pairs: %s/%s (%.1f%%) - status: %s",
+                    idx + 1,
+                    total_rows,
+                    progress,
+                    result_row['status'],
+                )
+                while next_progress <= progress:
+                    next_progress += progress_step_percent
         
         # Crea il DataFrame dei risultati
         results_df = pd.DataFrame(results)
