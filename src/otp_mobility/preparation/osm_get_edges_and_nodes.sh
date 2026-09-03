@@ -4,11 +4,17 @@ echo "Conversione OSM a rete stradale (EPSG:6875)..."
 
 cat > process_network.py << 'EOF'
 import json
+import logging
 import subprocess
 import math
 import geopandas as gpd
 from collections import defaultdict, OrderedDict
 from statistics import median
+
+from otp_mobility.utils.config import logging_level
+
+logger = logging.getLogger(__name__)
+logger.setLevel(logging_level)
 
 def haversine_distance(lat1, lon1, lat2, lon2):
     R = 6371000
@@ -221,7 +227,7 @@ def process_network():
     
     gdf_nodes.to_file('bologna-highway-nodes.geojson', driver='GeoJSON')
     
-    print(f"Edges: {len(edges)} | Nodes: {len(unique_nodes)}")
+    logger.info("Edges: %s | Nodes: %s", len(edges), len(unique_nodes))
     
     import os
     for temp_file in ['temp_highways.geojson', 'temp_edges_4326.geojson', 'temp_nodes_4326.geojson']:

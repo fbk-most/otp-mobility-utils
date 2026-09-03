@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 import osmium
+import logging
+from otp_mobility.utils.config import logging_level
 from pathlib import Path
 from datetime import datetime
 
-from otp_mobility.utils.config import verbose
 
 class ParkingHandler(osmium.SimpleHandler):
     def __init__(self, writer):
@@ -84,25 +85,24 @@ class ParkingHandler(osmium.SimpleHandler):
         ))
 
 def _show_final_stats(handler, input_file: str, output_file: str):
-    print(f"-> N. parkings found: {handler.total_parking_count}; N. parkings modified: {handler.modified_count}")
+    logging.info("Parkings found: %s; parkings modified: %s", handler.total_parking_count, handler.modified_count)
     
     original_size = Path(input_file).stat().st_size / (1024 * 1024)
     filtered_size = Path(output_file).stat().st_size / (1024 * 1024)
-    print(f"-> Original size: {original_size:.2f} MB; New size: {filtered_size:.2f} MB")
+    logging.info("Original size: %.2f MB; new size: %.2f MB", original_size, filtered_size)
 
-    print(f"-> Elements in the original file: {_count_elements(input_file)}")
-    print(f"   Elements in the new file: {_count_elements(output_file)}")
+    logging.info("Elements in original file: %s", _count_elements(input_file))
+    logging.info("Elements in new file: %s", _count_elements(output_file))
     
 
 def add_parkrides(input_file: str, output_file: str):
     writer = osmium.SimpleWriter(output_file, overwrite=True)
     handler = ParkingHandler(writer)
-    print(f"-> Getting elems \n and it's {datetime.now().strftime('%H:%M:%S')}") if verbose else None
+    logging.debug("Getting elements at %s", datetime.now().strftime('%H:%M:%S'))
     handler.apply_file(input_file)
     writer.close()
-    print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we've finished!") if verbose else None
-    if verbose:
-        _show_final_stats(handler, input_file, output_file)
+    logging.debug("Finished at %s", datetime.now().strftime('%H:%M:%S'))
+    _show_final_stats(handler, input_file, output_file)
 
 def _count_elements(input_file: str):
     i_in, i_iw, i_ir = 0, 0, 0
@@ -118,14 +118,13 @@ def _count_elements(input_file: str):
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 2.")
-        print("Correct usage: python add_parkrides.py input output")
+        logging.error("Wrong number of inputs. Given %s, while needed 2.", len(sys.argv) - 1)
+        logging.error("Correct usage: python add_parkrides.py input output")
         sys.exit(1)
     
     # Configuration
     input_file = sys.argv[1]
     output_file = sys.argv[2]
-    print(f"Executing add_parkrides.py with: \n- input = {input_file}\n- output = {output_file}\n")
+    logging.info("Executing add_parkrides.py with input=%s, output=%s", input_file, output_file)
 
     add_parkrides(input_file, output_file)
-    print("\n")

@@ -12,6 +12,8 @@ We finally define the main function of the code, extract_with_pyosmium, that gen
 """
 
 import osmium
+import logging
+from otp_mobility.utils.config import logging_level
 import geopandas
 from shapely import wkt
 from pathlib import Path
@@ -19,7 +21,6 @@ from datetime import datetime
 import sys
 
 from otp_mobility.preparation.back_way_forward_reference_writer import BackWayForwardReferenceWriter
-from otp_mobility.utils.config import verbose
 
 
 def _count_elements(input_file: str):
@@ -37,15 +38,15 @@ def _show_stats(n_objects, input_file: str, output_file: str):
     # N. elements
     i_in, i_iw, i_ir = _count_elements(input_file)
     i_on, i_ow, i_or = _count_elements(output_file)
-    print(f"-> How many in the original file: {i_in} nodes, {i_iw} ways, {i_ir} relations")
-    print(f"   How many explicitly added: {n_objects[0]} nodes, {n_objects[1]} ways, {n_objects[2]} relations") 
-    print(f"   How many in the output file: {i_on} nodes, {i_ow} ways, {i_or} relations")  
+    logging.info("Original file: %s nodes, %s ways, %s relations", i_in, i_iw, i_ir)
+    logging.info("Explicitly added: %s nodes, %s ways, %s relations", *n_objects)
+    logging.info("Output file: %s nodes, %s ways, %s relations", i_on, i_ow, i_or)
 
     # Sizes
     original_size = Path(input_file).stat().st_size / (1024 * 1024)
     filtered_size = Path(output_file).stat().st_size / (1024 * 1024)
-    print(f"-> Original size: {original_size:.2f} MB")
-    print(f"   New size: {filtered_size:.2f} MB")
+    logging.info("Original size: %.2f MB", original_size)
+    logging.info("New size: %.2f MB", filtered_size)
 
 
 class ExtractInBbox(osmium.SimpleHandler):
@@ -88,16 +89,15 @@ def extract_bbox_with_pyosmium(bbox, input_file: str, output_file: str):
     )
 
     # Nodes and Ways
-    print(f"-> Getting elems \n and it's {datetime.now().strftime('%H:%M:%S')}") if verbose else None
+    logging.debug("Getting elements at %s", datetime.now().strftime('%H:%M:%S'))
     handler = ExtractInBbox(bbox, writer)
     handler.apply_file(input_file)
     n_objects = [handler.n_nodes, handler.n_ways, handler.n_relations]
     writer.close()
-    print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we've finished!") if verbose else None
+    logging.debug("Finished at %s", datetime.now().strftime('%H:%M:%S'))
 
     # Print info
-    if verbose:
-        _show_stats(n_objects, input_file, output_file)
+    _show_stats(n_objects, input_file, output_file)
 
 
 class ExtractInPolygon(osmium.SimpleHandler):
@@ -155,16 +155,15 @@ def extract_polygon_with_pyosmium(
         polygon = polygon_shape.copy().geometry.iloc[0]
 
     # Nodes and Ways
-    print(f"-> Getting elements \n and it's {datetime.now().strftime('%H:%M:%S')}") if verbose else None
+    logging.debug("Getting elements at %s", datetime.now().strftime('%H:%M:%S'))
     handler = ExtractInPolygon(polygon, writer)
     handler.apply_file(input_file)
     n_objects = [handler.n_nodes, handler.n_ways, handler.n_relations]
     writer.close()
-    print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we've finished!") if verbose else None
+    logging.debug("Finished at %s", datetime.now().strftime('%H:%M:%S'))
 
     # Print info
-    if verbose:
-        _show_stats(n_objects, input_file, output_file)
+    _show_stats(n_objects, input_file, output_file)
 
  
 def extract_polygon_with_pyosmium_no(polygon_file, input_file: str, output_file: str):
@@ -208,16 +207,15 @@ def extract_polygon_with_pyosmium_no(polygon_file, input_file: str, output_file:
                 n_relations += 1
     writer.close()
 
-    if verbose:
-        _show_stats([n_nodes, n_ways, n_relations], input_file, output_file)
+    _show_stats([n_nodes, n_ways, n_relations], input_file, output_file)
 
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 2.")
-        print("Correct usage 1: python extract_with_pyosmium.py lon1,lat1,lon2,lat2 input output")
-        print("Correct usage 2: python extract_with_pyosmium.py polygon.geojson input output")
+        logging.error("Wrong number of inputs. Given %s, while needed 2.", len(sys.argv) - 1)
+        logging.error("Correct usage 1: python extract_with_pyosmium.py lon1,lat1,lon2,lat2 input output")
+        logging.error("Correct usage 2: python extract_with_pyosmium.py polygon.geojson input output")
         sys.exit(1)
         
     first_arg = sys.argv[1]
@@ -226,12 +224,11 @@ if __name__ == "__main__":
 
     # Extract inside a polygon
     if first_arg.endswith('.geojson'):
-        print(f"Executing resize_av.py with: \n- polygon = {first_arg}\n- input = {input_file}\n- output = {output_file}\n")
+        logging.info("Executing extract_with_pyosmium.py with polygon=%s, input=%s, output=%s", first_arg, input_file, output_file)
         extract_polygon_with_pyosmium(first_arg, input_file, output_file)
 
     # Extract inside a boox
     else:
         first_arg = [float(i) for i in first_arg.split(",")]
-        print(f"Executing resize_av.py with: \n- bbox = {first_arg}\n- input = {input_file}\n- output = {output_file}\n")
+        logging.info("Executing extract_with_pyosmium.py with bbox=%s, input=%s, output=%s", first_arg, input_file, output_file)
         extract_bbox_with_pyosmium(first_arg, input_file, output_file)
-    print("\n")

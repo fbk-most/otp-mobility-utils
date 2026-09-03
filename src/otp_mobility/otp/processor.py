@@ -10,14 +10,7 @@ import pandas as pd
 import requests
 
 from otp_mobility.utils.config import OTP_ENDPOINT
-
-try:
-    from runners.config import logging_level
-except ImportError:
-    logging_level = logging.INFO
-
-if not logging.getLogger().handlers:
-    logging.basicConfig(level=logging_level)
+from otp_mobility.utils.config import logging_level
 
 logger = logging.getLogger(__name__)
 
@@ -88,7 +81,7 @@ QUERY_COMPLEX = """
 """
 
 class OTPBatchProcessor:
-    def __init__(self, otp_graphql_endpoint: str):
+    def __init__(self, otp_graphql_endpoint: str, query: str = QUERY_COMPLEX):
         """
         Initialize the OpenTripPlanner processor
         
@@ -97,7 +90,7 @@ class OTPBatchProcessor:
         """
         self.endpoint = otp_graphql_endpoint
         self.request_count = 0
-        self.query = QUERY_COMPLEX
+        self.query = query
     
     def execute_query(self, origin_lat: float, origin_lon: float, 
                      dest_lat: float, dest_lon: float, 
@@ -166,7 +159,7 @@ class OTPBatchProcessor:
             response = session.post(
                 self.endpoint,
                 json=payload,
-                timeout=30
+                timeout=120
             )
             
             # Close the session after the use
@@ -366,9 +359,9 @@ class OTPBatchProcessor:
             dest_lat_tmp = dest_lat
             dest_lon_tmp = dest_lon 
             n_iter=0
-                
-            while not result_found and n_iter < 10 and (origin_change or dest_change):
-                # EsExecute the query
+
+            while not result_found and n_iter < 10:
+                # Execute the query
                 result = self.execute_query(
                     origin_lat=origin_lat_tmp, origin_lon=origin_lon_tmp, 
                     dest_lat=dest_lat_tmp, dest_lon=dest_lon_tmp, 
@@ -395,7 +388,6 @@ class OTPBatchProcessor:
                 n_iter += 1
                 
             # Pause, not to overload the server
-            #print(route_info)
             if delay_seconds > 0:
                 time_module.sleep(delay_seconds)
 
@@ -513,62 +505,6 @@ def test_single_query(main_modes: list):
     logger.info("Extracted info: %s", route_info)
     logger.info("Iteration before convergence: %s", n_iter)
 
-def simulate_otp(
-    df,
-    main_modes: list,
-    otp_endpoint,
-):
-    """
-    Processes travel routes using the OpenTripPlanner batch processor based on the specified main modes.
-    Args:
-        main_modes (list): List of main travel modes to process. Valid values are "CAR", "CAR_PARK", "TRANSIT", and "WALK".
-    Workflow:
-        - Validates the provided main modes.
-        - Ensures "WALK" is included in the main modes.
-        - Configures OTP endpoint and input/output file paths.
-            - Here, properly set the dataset of ODs and the name of the output file.
-        - Initializes the OTPBatchProcessor.
-        - Processes the dataset for the specified travel modes and parameters.
-            - Inside this step the output of the simulator is found and saved.
-        - Prints statistics about the processed routes, including total, successful, and unsuccessful routes,
-          as well as duration statistics for successful routes.
-    """
-
-    # Fix: eventually add WALK
-    if "WALK" not in main_modes:
-        main_modes = main_modes + ["WALK"]
-
-    # Initialize the processor
-    processor = OTPBatchProcessor(otp_endpoint)
-    
-    # Process the dataset
-    results = processor.process_dataset(
-        df=df,
-        main_mode=main_modes,
-        origin_lat_col='origin_lat',
-        origin_lon_col='origin_lon',
-        dest_lat_col='dest_lat',
-        dest_lon_col='dest_lon',
-        departure_date="2025-06-10",  # YYYY-MM-DD format
-        departure_time="07:00:00",  # HH:MM:SS format
-        delay_seconds=1.0,  # Pausa tra le richieste,
-        dest_change=True,
-        origin_change=True
-    )
- 
-    logger.info("--- STATISTICS ---")
-    logger.info("Total routes processed: %s", len(results))
-    logger.info("Routes found: %s", len(results[results['status'] == 'success']))
-    logger.info("Routes not found: %s", len(results[results['status'] == 'no_route']))
-
-    if len(results[results['status'] == 'success']) > 0:
-        successful_routes = results[results['status'] == 'success']
-        logger.info("Avg. duration: %.2f minutes", (successful_routes['duration_seconds'].mean()) / 60)
-        logger.info("Min duration: %.2f minutes", (successful_routes['duration_seconds'].min()) / 60)
-        logger.info("Max duration: %.2f minutes", (successful_routes['duration_seconds'].max()) / 60)
-        logger.info("Sample results: %s", results.head(5).to_dict(orient='records'))
-
-    return results
 
 if __name__ == "__main__":
     test_single_query(main_modes=["CAR_PARK", "TRANSIT", "WALK"])

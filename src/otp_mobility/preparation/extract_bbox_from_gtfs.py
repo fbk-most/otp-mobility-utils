@@ -1,3 +1,6 @@
+import logging
+from otp_mobility.utils.config import logging_level
+
 import pandas as pd
 from zipfile import ZipFile
 
@@ -27,7 +30,7 @@ def get_bbox_gtfs():
                     float(min_lat), 
                     float(max_lon), 
                     float(max_lat))
-    print("Bounding Box:", bounding_box)
+    logging.info("Bounding Box: %s", bounding_box)
     # (10.79511592, 44.09166617, 12.31057532, 44.8521224)
     return bounding_box
 

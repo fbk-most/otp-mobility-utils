@@ -1,3 +1,6 @@
+import logging
+from otp_mobility.utils.config import logging_level
+
 import osmium
 import os
 
@@ -23,10 +26,9 @@ if __name__ == "__main__":
     ]
 
     for f in files:
-        print(f"\nFile: {f}")
+        logging.info("File: %s", f)
         output_file3 = f
         i_in, i_iw, i_ir = _count_elements(output_file3)
         output_size3 = os.path.getsize(output_file3) / (1024*1024)  # MB
-        print(f"Elements in the file: {i_in} nodes, {i_iw} ways, {i_ir} relations")
-        print(f"File size: {output_size3:.2f} MB")
-        print("\n")
+        logging.info("Elements in the file: %s nodes, %s ways, %s relations", i_in, i_iw, i_ir)
+        logging.info("File size: %.2f MB", output_size3)

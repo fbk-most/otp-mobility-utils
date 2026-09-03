@@ -10,8 +10,9 @@ import osmium
 from pathlib import Path
 from datetime import datetime
 import sys
+import logging
+from otp_mobility.utils.config import logging_level
 
-from otp_mobility.utils.config import verbose
 
 
 class CarRestrictionHandler(osmium.SimpleHandler):
@@ -73,12 +74,12 @@ class CarRestrictionHandler(osmium.SimpleHandler):
     def relation(self, r):
         self.writer.add_relation(r)
 
-def _show_print(handler, input_file: str, output_file: str):         
-    print(f"-> Conversion completed! {handler.highways_modified} highways modified with anti-car restrictions.")
+def _show_stats(handler, input_file: str, output_file: str):
+    logging.info("Conversion completed: %s highways modified with anti-car restrictions.", handler.highways_modified)
     original_size = Path(input_file).stat().st_size / (1024 * 1024)
     filtered_size = Path(output_file).stat().st_size / (1024 * 1024)
-    print(f"-> Original size: {original_size:.2f} MB → Filtered size: {filtered_size:.2f} MB")
-    print(f"-> Original elems: {_count_elements(input_file)} → Filtered elems: {_count_elements(output_file)}")
+    logging.info("Original size: %.2f MB; filtered size: %.2f MB", original_size, filtered_size)
+    logging.info("Original elements: %s; filtered elements: %s", _count_elements(input_file), _count_elements(output_file))
 
 def _count_elements(input_file: str):
     i_in, i_iw, i_ir = 0, 0, 0
@@ -94,24 +95,22 @@ def _count_elements(input_file: str):
 def add_car_restrictions(input_file: str, output_file: str):
     writer = osmium.SimpleWriter(output_file, overwrite=True)
     handler = CarRestrictionHandler(writer)
-    print(f"-> Getting elems \n and it's {datetime.now().strftime('%H:%M:%S')}") if verbose else None
+    logging.debug("Getting elements at %s", datetime.now().strftime('%H:%M:%S'))
     handler.apply_file(input_file)
     writer.close()
-    print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we finished") if verbose else None
-    if verbose:
-        _show_print(handler, input_file, output_file)
+    logging.debug("Finished at %s", datetime.now().strftime('%H:%M:%S'))
+    _show_stats(handler, input_file, output_file)
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 3:
-        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 2.")
-        print("Correct usage: python add_car_restrictions.py input output")
+        logging.error("Wrong number of inputs. Given %s, while needed 2.", len(sys.argv) - 1)
+        logging.error("Correct usage: python add_car_restrictions.py input output")
         sys.exit(1)
     
     # Configuration
     input_file = sys.argv[1]
     output_file = sys.argv[2]
-    print(f"Executing add_car_restrictions.py with: \n- input = {input_file}\n- output = {output_file}\n")
+    logging.info("Executing add_car_restrictions.py with input=%s, output=%s", input_file, output_file)
 
     add_car_restrictions(input_file, output_file)
-    print("\n")

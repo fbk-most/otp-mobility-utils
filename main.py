@@ -1,5 +1,10 @@
+import logging
+
+from otp_mobility.utils.config import logging_level
+
+
 def main():
-    print("Hello from otp-gdb-mobility!")
+    logging.info("Hello from otp-gdb-mobility!")
 
 
 if __name__ == "__main__":

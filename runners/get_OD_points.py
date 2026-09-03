@@ -6,12 +6,13 @@ Executes the steps described in the README in sequence.
 
 import pandas as pd
 import geopandas as gpd
+import logging
 from shapely.geometry import Point
 
 from otp_mobility.utils.constants import CRS_LATLONG, CRS_PROJECTED, P2V
 from paths import file_centroids, file_shape, file_av, file_flows, data_output
 
-from config import logging, logging_level
+from otp_mobility.utils.config import logging_level
 
 def read_and_prepare_centroids(file_centroids, file_shape, file_av,):
     # Assign av to OD shapes
@@ -279,7 +280,6 @@ def _AOI_flows(
     df_od["to"] = df_od["to"].astype(int)
     od_shapes["id"] = od_shapes["id"].astype(int)
     df_od = df_od[(df_od["from"].isin(od_shapes["id"])) & df_od["to"].isin(od_shapes["id"])]
-    # print("Original total flow: ", sum(df_od["flow"])) ## Debug only
 
     # Assign shapes and flows
     df_od = df_od.merge(
@@ -302,7 +302,6 @@ def _AOI_flows(
         * df_od["area_to"] / _sum_unique_area(df_od, "area_to", "to", "type_av_to")
     ).fillna(0)
 
-    # print("Final total flow: ", sum(df_od["flow"])) ## Debug only
     df_od["from"] = df_od["from"].astype(int)
     df_od["to"] = df_od["to"].astype(int)
     df_od = df_od[["from","type_av_from","to","type_av_to","flow"]]
@@ -416,8 +415,6 @@ def _sum_unique_area(df, area_col, id_col, type_col):
     )
 
 if __name__ == '__main__':
-    logging.basicConfig(level=logging_level)
-
     logging.info("Computing points from outside - extended")
     df_extended = prepare_otp_input_extended(file_centroids, file_shape, file_av, file_flows)
     logging.info("and saving.")

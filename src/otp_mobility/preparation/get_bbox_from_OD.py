@@ -1,10 +1,11 @@
 import pandas as pd
+import logging
+from otp_mobility.utils.config import logging_level
 from shapely.geometry import box
 from shapely.ops import transform
 from pyproj import Transformer, CRS
 from pathlib import Path
 
-from otp_mobility.utils.config import verbose
 from otp_mobility.utils.utils import get_dataframe
 from otp_mobility.utils.constants import N_CRS_PROJECTED, N_CRS_LATLONG
 
@@ -21,8 +22,7 @@ def get_bbox(name_input: str, enlarged: bool = False):
     
     bounding_box = (float(min_lon), float(min_lat), float(max_lon), float(max_lat))
     
-    print("Original bounding box in lon/lat (WGS84):") if verbose else None
-    print(bounding_box) if verbose else None
+    logging.debug("Original bounding box in lon/lat (WGS84): %s", bounding_box)
 
     if not enlarged:
         return bounding_box
@@ -41,8 +41,7 @@ def get_bbox(name_input: str, enlarged: bool = False):
     to_wgs84 = Transformer.from_crs(projected_crs, wgs84, always_xy=True).transform
     bbox_enlarged_wgs84 = transform(to_wgs84, bbox_enlarged_projected)
     
-    print("\n Enlarged bounding box in lon/lat (WGS84) with a 50km buffer:") if verbose else None
-    print(bbox_enlarged_wgs84.bounds) if verbose else None
+    logging.debug("Enlarged bounding box in lon/lat (WGS84) with a 50km buffer: %s", bbox_enlarged_wgs84.bounds)
     
     return bbox_enlarged_wgs84.bounds
 
@@ -52,4 +51,3 @@ if __name__ == "__main__":
     get_bbox(name_input, enlarged=False)
     # (10.860721599862547, 44.05630624769124, 12.012741989785605, 44.820050726223485)
     # (10.734269464357556,43.96629819030445,12.139133497965453,44.91004596649926)
-    print("\n")

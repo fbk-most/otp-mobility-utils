@@ -12,9 +12,10 @@ Note: this filter implementation is tested to work with our filters written in f
 """
 
 import osmium
+import logging
+from otp_mobility.utils.config import logging_level
 from pathlib import Path
 import sys
-from otp_mobility.utils.config import verbose
 from datetime import datetime
 from otp_mobility.preparation.back_way_forward_reference_writer import BackWayForwardReferenceWriter
 from otp_mobility.preparation.parse_filter_expression import parse_filter_expression
@@ -28,7 +29,7 @@ def our_tags_filter_with_pyosmium(input_file, output_file, filter_file):
     writer = osmium.BackReferenceWriter(output_file, ref_src=input_file, overwrite=True)
 
     # Read file, filter and write file
-    print(f"-> Getting elems \n and it's {datetime.now().strftime('%H:%M:%S')}") if verbose else None
+    logging.debug("Getting elements at %s", datetime.now().strftime('%H:%M:%S'))
     fp = osmium.FileProcessor(input_file)
     osmium_filters = [
         osmium.filter.KeyFilter(*full_filter_n.keys()).enable_for(osmium.osm.NODE),
@@ -44,13 +45,12 @@ def our_tags_filter_with_pyosmium(input_file, output_file, filter_file):
             writer.add_way(obj)
         elif obj.is_relation() and _check_condition_relations(obj.tags, full_filter_r, full_filter_a):
             writer.add_relation(obj)
-    print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we are almost closing!") if verbose else None
+    logging.debug("Almost finished at %s", datetime.now().strftime('%H:%M:%S'))
     writer.close()
-    print(f"-> It's {datetime.now().strftime('%H:%M:%S')}\n and we've finished!") if verbose else None
+    logging.debug("Finished at %s", datetime.now().strftime('%H:%M:%S'))
 
     # Print stats
-    if verbose:
-        _show_stats([0,0,0], input_file, output_file)
+    _show_stats([0,0,0], input_file, output_file)
 
 def _check_condition(tags, filter):
     for t in tags:
@@ -89,28 +89,27 @@ def _show_stats(n_objects, input_file: str, output_file: str):
     # N. elements
     i_in, i_iw, i_ir = _count_elements(input_file)
     i_on, i_ow, i_or = _count_elements(output_file)
-    print(f"-> How many in the original file: {i_in} nodes, {i_iw} ways, {i_ir} relations")
-    print(f"   How many explicitly added: {n_objects[0]} nodes, {n_objects[1]} ways, {n_objects[2]} relations") 
-    print(f"   How many in the output file: {i_on} nodes, {i_ow} ways, {i_or} relations")  
+    logging.info("Original file: %s nodes, %s ways, %s relations", i_in, i_iw, i_ir)
+    logging.info("Explicitly added: %s nodes, %s ways, %s relations", *n_objects)
+    logging.info("Output file: %s nodes, %s ways, %s relations", i_on, i_ow, i_or)
 
     # Sizes
     original_size = Path(input_file).stat().st_size / (1024 * 1024)
     filtered_size = Path(output_file).stat().st_size / (1024 * 1024)
-    print(f"-> Original size: {original_size:.2f} MB")
-    print(f"   New size: {filtered_size:.2f} MB")
+    logging.info("Original size: %.2f MB", original_size)
+    logging.info("New size: %.2f MB", filtered_size)
 
 
 if __name__ == "__main__":
     if len(sys.argv) != 4:
-        print(f"Error: wrong number of inputs. Given {len(sys.argv)-1}, while needed 3.")
-        print("Correct usage: python tag_filter_with_pyosmium.py input output filter_file")
+        logging.error("Wrong number of inputs. Given %s, while needed 3.", len(sys.argv) - 1)
+        logging.error("Correct usage: python tag_filter_with_pyosmium.py input output filter_file")
         sys.exit(1)
     
     # Configuration
     input_file = sys.argv[1]
     output_file = sys.argv[2]
     filter_file = sys.argv[3]
-    print(f"Executing add_parkrides.py with: \n- input = {input_file}\n- output = {output_file}\n- filter = {filter_file}\n")
+    logging.info("Executing tags_filter_with_pyosmium.py with input=%s, output=%s, filter=%s", input_file, output_file, filter_file)
 
     our_tags_filter_with_pyosmium(str(input_file), str(output_file), str(filter_file))
-    print("\n")

@@ -1,4 +1,6 @@
 import re
+import logging
+from otp_mobility.utils.config import logging_level
 from collections import defaultdict
 
 def parse_filter_expression(filepath: str):
@@ -62,36 +64,36 @@ if __name__ == "__main__":
     
     filter_n, filter_w, filter_r, filter_a = parse_filter_expression(filepath)
     
-    print("=== NODE FILTERS (n/) ===")
+    logging.info("=== NODE FILTERS (n/) ===")
     for key, values in sorted(filter_n.items()):
         if values:
-            print(f"'{key}': {values},")
+            logging.info("'%s': %s,", key, values)
         else:
-            print(f"'{key}': set(),")
+            logging.info("'%s': set(),", key)
     
-    print("\n=== WAY FILTERS (w/) ===")
+    logging.info("=== WAY FILTERS (w/) ===")
     for key, values in sorted(filter_w.items()):
         if values:
-            print(f"'{key}': {values},")
+            logging.info("'%s': %s,", key, values)
         else:
-            print(f"'{key}': set(),")
+            logging.info("'%s': set(),", key)
     
-    print("\n=== RELATION FILTERS (r/) ===")
+    logging.info("=== RELATION FILTERS (r/) ===")
     for key, values in sorted(filter_r.items()):
         if values:
-            print(f"'{key}': {values},")
+            logging.info("'%s': %s,", key, values)
         else:
-            print(f"'{key}': set(),")
+            logging.info("'%s': set(),", key)
     
-    print("\n=== AREA FILTERS (a/) ===")
+    logging.info("=== AREA FILTERS (a/) ===")
     for key, values in sorted(filter_a.items()):
         if values:
-            print(f"'{key}': {values},")
+            logging.info("'%s': %s,", key, values)
         else:
-            print(f"'{key}': set(),")
+            logging.info("'%s': set(),", key)
     
-    print("\n=== STATISTICS ===")
-    print(f"Nodes: {len(filter_n)} keys")
-    print(f"Ways: {len(filter_w)} keys")
-    print(f"Relations: {len(filter_r)} keys")
-    print(f"Areas: {len(filter_a)} keys")
+    logging.info("=== STATISTICS ===")
+    logging.info("Nodes: %s keys", len(filter_n))
+    logging.info("Ways: %s keys", len(filter_w))
+    logging.info("Relations: %s keys", len(filter_r))
+    logging.info("Areas: %s keys", len(filter_a))
