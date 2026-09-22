@@ -1,9 +1,8 @@
-import logging
-from otp_mobility.utils.config import logging_level
-
 import geopandas as gpd
 import sys
+
 from otp_mobility.utils.constants import CRS_LATLONG, CRS_PROJECTED
+from otp_mobility.utils.config import logging, logging_level
 
 def resize_av(input_geojson: str, output_geojson: str):
     av = gpd.read_file(input_geojson).to_crs(CRS_PROJECTED)
@@ -13,6 +12,7 @@ def resize_av(input_geojson: str, output_geojson: str):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging_level)
     if len(sys.argv) != 3:
         logging.error("Wrong number of inputs. Given %s, while needed 2.", len(sys.argv) - 1)
         logging.error("Correct usage: python resize_av.py input output")

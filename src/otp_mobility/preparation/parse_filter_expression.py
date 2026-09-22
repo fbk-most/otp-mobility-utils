@@ -1,6 +1,6 @@
 import re
-import logging
-from otp_mobility.utils.config import logging_level
+import sys
+from otp_mobility.utils.config import logging, logging_level
 from collections import defaultdict
 
 def parse_filter_expression(filepath: str):
@@ -60,7 +60,14 @@ def parse_filter_expression(filepath: str):
 
 # Usage example
 if __name__ == "__main__":
-    filepath = "data/input_service/filter_expression.sh"
+
+    logging.basicConfig(level=logging_level)
+    if len(sys.argv) != 1:
+        logging.error("Wrong number of inputs. Given %s, while needed 1.", len(sys.argv) - 1)
+        logging.error("Correct usage: python parse_filter_expression.py input output")
+        sys.exit(1)
+
+    filepath = sys.argv[1]
     
     filter_n, filter_w, filter_r, filter_a = parse_filter_expression(filepath)
     

@@ -12,13 +12,13 @@ Note: this filter implementation is tested to work with our filters written in f
 """
 
 import osmium
-import logging
-from otp_mobility.utils.config import logging_level
 from pathlib import Path
 import sys
 from datetime import datetime
+
 from otp_mobility.preparation.back_way_forward_reference_writer import BackWayForwardReferenceWriter
 from otp_mobility.preparation.parse_filter_expression import parse_filter_expression
+from otp_mobility.utils.config import logging, logging_level
 
 
 def our_tags_filter_with_pyosmium(input_file, output_file, filter_file):
@@ -101,6 +101,7 @@ def _show_stats(n_objects, input_file: str, output_file: str):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging_level)
     if len(sys.argv) != 4:
         logging.error("Wrong number of inputs. Given %s, while needed 3.", len(sys.argv) - 1)
         logging.error("Correct usage: python tag_filter_with_pyosmium.py input output filter_file")

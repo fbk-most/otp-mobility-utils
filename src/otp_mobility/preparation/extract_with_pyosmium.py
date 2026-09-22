@@ -212,6 +212,7 @@ def extract_polygon_with_pyosmium_no(polygon_file, input_file: str, output_file:
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging_level)
     if len(sys.argv) != 4:
         logging.error("Wrong number of inputs. Given %s, while needed 2.", len(sys.argv) - 1)
         logging.error("Correct usage 1: python extract_with_pyosmium.py lon1,lat1,lon2,lat2 input output")
