@@ -63,6 +63,7 @@ src/
     │   └── verify_file_sizes.py
     ├── otp/
     │   ├── generate_config.py
+    │   ├── manager.py
     │   └── processor.py
     └── utils/
         ├── config.py
