@@ -10,10 +10,37 @@ from otp_mobility.utils.config import OTP_URL
 logger = logging.getLogger(__name__)
 
 
+def start_otp_with_log(
+    folder_data_path, 
+    folder_jar_path, 
+    log_path
+):
+    """Start OTP and append its stdout/stderr to an external log file."""
+    jar_path = Path(folder_jar_path).expanduser().resolve()
+    command = [
+        "java",
+        "-Xmx2G",
+        "-jar",
+        str(jar_path),
+        "--build",
+        "--serve",
+        str(folder_data_path),
+    ]
+    log_file = open(log_path, "a", encoding="utf-8", buffering=1)
+    process = subprocess.Popen(
+        command,
+        stdout=log_file,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+    return process, log_file
+
+
 def start_otp(
     folder_data_path,
     folder_jar_path,
 ):
+    """Start OTP and without saving stdout/stderr."""
     folder_jar_extended = Path(folder_jar_path).expanduser().resolve()
     command = [
         "java",

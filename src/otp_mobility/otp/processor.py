@@ -1,5 +1,4 @@
 import json
-import logging
 import random
 import sys
 import time as time_module
@@ -10,7 +9,7 @@ import pandas as pd
 import requests
 
 from otp_mobility.utils.config import OTP_ENDPOINT
-from otp_mobility.utils.config import logging_level
+from otp_mobility.utils.config import logging, logging_level
 
 logger = logging.getLogger(__name__)
 

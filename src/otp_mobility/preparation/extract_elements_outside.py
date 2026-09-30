@@ -5,8 +5,6 @@ from datetime import datetime
 import sys
 from pathlib import Path
 
-
-
 def extract_elements_outside(input_file_container: str, input_file_contained: str, output_file:str):
     # Inizialize the ids file
     ids_nodes, ids_ways, ids_relations = set(), set(), set()
@@ -70,6 +68,7 @@ def _show_file_sizes(input_file_container: str, input_file_contained: str, outpu
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging_level)
     if len(sys.argv) != 4:
         logging.error("Wrong number of inputs. Given %s, while needed 3.", len(sys.argv) - 1)
         logging.error("Correct usage: python extract_elements_outside.py input_container input_contained output")

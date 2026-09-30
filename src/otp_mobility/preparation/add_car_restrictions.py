@@ -10,10 +10,7 @@ import osmium
 from pathlib import Path
 from datetime import datetime
 import sys
-import logging
-from otp_mobility.utils.config import logging_level
-
-
+from otp_mobility.utils.config import logging, logging_level
 
 class CarRestrictionHandler(osmium.SimpleHandler):
     def __init__(self, writer):
@@ -103,6 +100,7 @@ def add_car_restrictions(input_file: str, output_file: str):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging_level)
     if len(sys.argv) != 3:
         logging.error("Wrong number of inputs. Given %s, while needed 2.", len(sys.argv) - 1)
         logging.error("Correct usage: python add_car_restrictions.py input output")

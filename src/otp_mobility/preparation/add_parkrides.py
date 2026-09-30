@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 import osmium
-import logging
-from otp_mobility.utils.config import logging_level
+from otp_mobility.utils.config import logging, logging_level
 from pathlib import Path
+import sys
 from datetime import datetime
 
 
@@ -117,6 +117,7 @@ def _count_elements(input_file: str):
     
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging_level)
     if len(sys.argv) != 3:
         logging.error("Wrong number of inputs. Given %s, while needed 2.", len(sys.argv) - 1)
         logging.error("Correct usage: python add_parkrides.py input output")
