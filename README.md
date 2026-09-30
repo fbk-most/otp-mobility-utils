@@ -1,6 +1,6 @@
 # otp-gdb-mobility
 
-This project prepares OD and OSM data for a Bologna mobility study and runs OpenTripPlanner (OTP) simulations to compare travel times across different transport modes and spatial contexts.
+This project prepares OD and OSM data for urban mobility studies and runs OpenTripPlanner (OTP) simulations to compare travel times across different transport modes and spatial contexts.
 
 The workflow is structured around three main blocks:
 
